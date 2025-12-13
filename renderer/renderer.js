@@ -24,15 +24,59 @@ const confirmOkBtn = document.getElementById('confirm-ok');
 
 let db;
 let chats = [];
-let activeChatId = null;
 let isStreaming = false;
 let pendingNew = false;
 let renamingId = null;
-
-let activeView = 'chat';
 let trashQuery = '';
 
 let confirmAction = null;
+
+const TEMP_CHAT_ID = '__temp_chat__';
+let temporaryChatEnabled = false;
+let tempChat = null;
+
+let sidebarSelection = { kind: 'chat', id: null };
+
+const UI_STATE_KEY = 'crystal-chat:ui-state';
+
+function saveUIState() {
+  try {
+    const toSave = {
+      sidebarSelection:
+        sidebarSelection.kind === 'chat' && sidebarSelection.id === TEMP_CHAT_ID
+          ? { kind: 'chat', id: null }
+          : sidebarSelection
+    };
+    localStorage.setItem(UI_STATE_KEY, JSON.stringify(toSave));
+  } catch {
+    // ignore
+  }
+}
+
+function loadUIState() {
+  try {
+    const raw = localStorage.getItem(UI_STATE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function setSidebarSelection(next) {
+  sidebarSelection = next;
+  if (next.kind === 'trash') {
+    pendingNew = false;
+    renamingId = null;
+  }
+  if (next.kind !== 'chat' || next.id !== TEMP_CHAT_ID) {
+    temporaryChatEnabled = false;
+    tempChat = null;
+  }
+  saveUIState();
+  renderChats();
+  renderActiveChat();
+}
 
 const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -67,7 +111,21 @@ async function init() {
     });
   }, 6 * 60 * 60 * 1000);
   chats = await loadChats();
-  activeChatId = chats[0]?.id || null;
+  const ui = loadUIState();
+  const savedSel = ui?.sidebarSelection;
+  if (savedSel && savedSel.kind === 'trash') {
+    sidebarSelection = { kind: 'trash' };
+  } else if (savedSel && savedSel.kind === 'chat') {
+    if (savedSel.id === null) {
+      sidebarSelection = { kind: 'chat', id: null };
+    } else if (typeof savedSel.id === 'string' && chats.some((c) => c.id === savedSel.id)) {
+      sidebarSelection = { kind: 'chat', id: savedSel.id };
+    } else {
+      sidebarSelection = { kind: 'chat', id: chats[0]?.id || null };
+    }
+  } else {
+    sidebarSelection = { kind: 'chat', id: chats[0]?.id || null };
+  }
   renderChats();
   renderActiveChat();
   attachEvents();
@@ -87,30 +145,22 @@ function attachEvents() {
     }
   });
   newChatBtn.addEventListener('click', async () => {
-    activeChatId = null;
     pendingNew = true;
-    activeView = 'chat';
-    renderChats();
-    renderActiveChat();
+    setSidebarSelection({ kind: 'chat', id: null });
     promptInput.value = '';
     autosizePrompt();
     promptInput.focus();
   });
 
   trashBtn?.addEventListener('click', () => {
-    const nextView = activeView === 'trash' ? 'chat' : 'trash';
-    activeView = nextView;
-    if (nextView === 'trash') {
-      pendingNew = false;
-      renamingId = null;
-      activeChatId = null;
+    const nextKind = sidebarSelection.kind === 'trash' ? 'chat' : 'trash';
+    if (nextKind === 'trash') {
+      setSidebarSelection({ kind: 'trash' });
       if (trashSearchInput) trashSearchInput.focus();
     } else {
-      if (!activeChatId) activeChatId = chats[0]?.id || null;
+      setSidebarSelection({ kind: 'chat', id: chats[0]?.id || null });
       promptInput?.focus();
     }
-    renderChats();
-    renderActiveChat();
   });
 
   trashSearchInput?.addEventListener('input', () => {
@@ -250,18 +300,15 @@ async function createChat(title) {
 }
 
 function setActiveChat(id) {
-  activeChatId = id;
-  activeView = 'chat';
-  renderChats();
-  renderActiveChat();
+  setSidebarSelection({ kind: 'chat', id });
 }
 
 function renderChats() {
   chatListEl.innerHTML = '';
-  trashBtn?.classList.toggle('active', activeView === 'trash');
+  trashBtn?.classList.toggle('active', sidebarSelection.kind === 'trash');
   chats.forEach((chat) => {
     const item = document.createElement('div');
-    item.className = `chat-item ${chat.id === activeChatId ? 'active' : ''}`;
+    item.className = `chat-item ${sidebarSelection.kind === 'chat' && chat.id === sidebarSelection.id ? 'active' : ''}`;
     item.onclick = () => setActiveChat(chat.id);
 
     const content = document.createElement('div');
@@ -435,14 +482,15 @@ function renderMessageElement(msg) {
 }
 
 function renderActiveChat() {
-  const chat = chats.find((c) => c.id === activeChatId);
+  const activeChatId = sidebarSelection.kind === 'chat' ? sidebarSelection.id : null;
+  const chat = activeChatId === TEMP_CHAT_ID ? tempChat : chats.find((c) => c.id === activeChatId);
 
-  if (trashViewEl) trashViewEl.classList.toggle('hidden', activeView !== 'trash');
-  if (messagesEl) messagesEl.classList.toggle('hidden', activeView === 'trash');
-  if (promptForm) promptForm.classList.toggle('hidden', activeView === 'trash');
-  if (errorEl) errorEl.classList.toggle('hidden', activeView === 'trash' || errorEl.textContent === '');
+  if (trashViewEl) trashViewEl.classList.toggle('hidden', sidebarSelection.kind !== 'trash');
+  if (messagesEl) messagesEl.classList.toggle('hidden', sidebarSelection.kind === 'trash');
+  if (promptForm) promptForm.classList.toggle('hidden', sidebarSelection.kind === 'trash');
+  if (errorEl) errorEl.classList.toggle('hidden', sidebarSelection.kind === 'trash' || errorEl.textContent === '');
 
-  if (activeView === 'trash') {
+  if (sidebarSelection.kind === 'trash') {
     renderTrash();
     return;
   }
@@ -451,10 +499,16 @@ function renderActiveChat() {
   messagesEl.classList.toggle('empty', false);
 
   if (!chat) {
+    const layout = document.createElement('div');
+    layout.className = 'empty-layout';
+
+    const main = document.createElement('div');
+    main.className = 'empty-main';
+
     const empty = document.createElement('div');
     empty.className = 'empty-state';
     empty.textContent = 'What can I help with?';
-    messagesEl.appendChild(empty);
+    main.appendChild(empty);
 
     const suggestions = [
       'What can you do?',
@@ -484,8 +538,91 @@ function renderActiveChat() {
       };
       chipWrap.appendChild(btn);
     });
-    messagesEl.appendChild(chipWrap);
 
+    const swap = document.createElement('div');
+    swap.className = 'empty-swap';
+
+    const explainer = document.createElement('div');
+    explainer.className = 'temp-chat-explainer';
+    explainer.textContent =
+      'Temporary chats are not saved to history and won\'t appear in the sidebar. Close or start a new chat to discard it.';
+
+    swap.appendChild(chipWrap);
+    swap.appendChild(explainer);
+
+    const syncSwap = (enabled) => {
+      if (enabled) {
+        chipWrap.style.display = 'none';
+        chipWrap.style.opacity = '0';
+        explainer.style.display = 'block';
+        explainer.style.opacity = '1';
+      } else {
+        explainer.style.display = 'none';
+        explainer.style.opacity = '0';
+        chipWrap.style.display = '';
+        chipWrap.style.opacity = '1';
+      }
+    };
+
+    let swapTimer = null;
+
+    const animateSwap = (enabled) => {
+      if (swapTimer) {
+        window.clearTimeout(swapTimer);
+        swapTimer = null;
+      }
+      if (enabled) {
+        chipWrap.style.opacity = '0';
+        swapTimer = window.setTimeout(() => {
+          if (!temporaryChatEnabled) return;
+          chipWrap.style.display = 'none';
+          explainer.style.display = 'block';
+          explainer.style.opacity = '0';
+          requestAnimationFrame(() => {
+            explainer.style.opacity = '1';
+          });
+          swapTimer = null;
+        }, 170);
+      } else {
+        explainer.style.opacity = '0';
+        swapTimer = window.setTimeout(() => {
+          if (temporaryChatEnabled) return;
+          explainer.style.display = 'none';
+          chipWrap.style.display = '';
+          chipWrap.style.opacity = '0';
+          requestAnimationFrame(() => {
+            chipWrap.style.opacity = '1';
+          });
+          swapTimer = null;
+        }, 170);
+      }
+    };
+
+    syncSwap(!!temporaryChatEnabled);
+
+    main.appendChild(swap);
+    layout.appendChild(main);
+
+    const toggle = document.createElement('label');
+    toggle.className = 'temp-chat-toggle';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = !!temporaryChatEnabled;
+    checkbox.onchange = () => {
+      temporaryChatEnabled = checkbox.checked;
+      animateSwap(!!temporaryChatEnabled);
+    };
+    const knob = document.createElement('span');
+    knob.className = 'temp-chat-switch';
+    const text = document.createElement('span');
+    text.className = 'temp-chat-toggle-text';
+    text.textContent = 'Temporary Chat';
+    toggle.appendChild(checkbox);
+    toggle.appendChild(knob);
+    toggle.appendChild(text);
+    layout.appendChild(toggle);
+
+    messagesEl.appendChild(layout);
     messagesEl.appendChild(typingIndicator);
     messagesEl.classList.add('empty');
     return;
@@ -500,7 +637,7 @@ function renderActiveChat() {
 async function handleSubmit(event) {
   event.preventDefault();
   if (isStreaming) return;
-  if (activeView !== 'chat') return;
+  if (sidebarSelection.kind !== 'chat') return;
 
   const content = promptInput.value.trim();
   if (!content) return;
@@ -509,17 +646,34 @@ async function handleSubmit(event) {
   promptInput.value = '';
   autosizePrompt();
 
-  let chat = chats.find((c) => c.id === activeChatId);
+  const currentId = sidebarSelection.kind === 'chat' ? sidebarSelection.id : null;
+  let chat = currentId === TEMP_CHAT_ID ? tempChat : chats.find((c) => c.id === currentId);
   if (!chat) {
-    const id = await createChat('New chat');
-    activeChatId = id;
-    chat = chats.find((c) => c.id === id);
+    if (temporaryChatEnabled) {
+      temporaryChatEnabled = false;
+      tempChat = {
+        id: TEMP_CHAT_ID,
+        title: 'Temporary chat',
+        createdAt: Date.now(),
+        messages: []
+      };
+      sidebarSelection = { kind: 'chat', id: TEMP_CHAT_ID };
+      saveUIState();
+      chat = tempChat;
+    } else {
+      const id = await createChat('New chat');
+      sidebarSelection = { kind: 'chat', id };
+      chat = chats.find((c) => c.id === id);
+      saveUIState();
+    }
     pendingNew = false;
   }
 
   const userMsg = { role: 'user', content };
   chat.messages.push(userMsg);
-  await saveChat(chat);
+  if (chat.id !== TEMP_CHAT_ID) {
+    await saveChat(chat);
+  }
   renderActiveChat();
   renderChats();
 
@@ -537,8 +691,9 @@ async function handleTrashChat(id) {
   await saveChat(chat);
   chats = chats.filter((c) => c.id !== id);
   if (renamingId === id) renamingId = null;
-  if (activeChatId === id) {
-    activeChatId = chats[0]?.id || null;
+  if (sidebarSelection.kind === 'chat' && sidebarSelection.id === id) {
+    sidebarSelection = { kind: 'chat', id: chats[0]?.id || null };
+    saveUIState();
   }
   renderChats();
   renderActiveChat();
@@ -661,12 +816,16 @@ async function streamAssistant(chat) {
           });
       }
     }
-    await saveChat(chat);
-    renderChats();
+    if (chat.id !== TEMP_CHAT_ID) {
+      await saveChat(chat);
+      renderChats();
+    }
   } catch (err) {
     showError(err.message || 'Failed to reach Ollama.');
     chat.messages.pop(); // remove assistant placeholder
-    await saveChat(chat);
+    if (chat.id !== TEMP_CHAT_ID) {
+      await saveChat(chat);
+    }
     renderActiveChat();
   } finally {
     isStreaming = false;
