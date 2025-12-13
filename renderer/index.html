@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Crystal Chat</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <button id="new-chat" class="button button-ghost full-width">+ New chat</button>
+        </div>
+        <div id="chat-list" class="chat-list"></div>
+      </aside>
+      <main class="chat-area">
+        <section id="messages" class="messages">
+          <div id="typing-indicator" class="typing chat-typing hidden">
+            <div class="spinner"></div>
+            Waiting for response...
+          </div>
+        </section>
+        <div id="error" class="error hidden"></div>
+        <form id="prompt-form" class="prompt-form">
+          <div class="input-shell">
+            <textarea
+              id="prompt-input"
+              class="prompt-input"
+              placeholder="Type your message..."
+              rows="1"
+            ></textarea>
+            <button id="send-btn" type="submit" class="send-button" aria-label="Send">
+              <span>➤</span>
+            </button>
+          </div>
+        </form>
+      </main>
+    </div>
+    <script src="../node_modules/marked/marked.min.js"></script>
+    <script src="renderer.js"></script>
+  </body>
+</html>

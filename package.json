@@ -1,0 +1,23 @@
+{
+  "name": "crystal-chat",
+  "version": "0.1.0",
+  "description": "Simple Electron chatbot using local Ollama inference with IndexedDB chat history.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "keywords": [
+    "electron",
+    "ollama",
+    "chat",
+    "local"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^30.0.9"
+  },
+  "dependencies": {
+    "marked": "^12.0.2"
+  }
+}

@@ -1,0 +1,5 @@
+Don’t over-engineer: AI is expensive and slow. Use simpler computing as much as possible.
+
+Work out of the box: especially with local AI, it’s important that, after installing, the system works fully out of the box.
+
+Focus on UX, not UI: UI is like fashion, and UX is what really matters for users. Don’t add fancy animations, materials, or effects, unless it truly justifies UX.
