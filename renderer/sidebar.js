@@ -74,26 +74,120 @@ export function renderChats({ els, state, onSetActiveChat, onStartRename, onTras
     const actions = document.createElement('div');
     actions.className = 'chat-actions';
 
-    const rename = document.createElement('button');
-    rename.className = 'chat-rename';
-    rename.setAttribute('aria-label', 'Rename chat');
-    rename.innerHTML =
-      '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="m14 6 2.293-2.293a1 1 0 0 1 1.414 0l2.586 2.586a1 1 0 0 1 0 1.414L18 10m-4-4-9.707 9.707a1 1 0 0 0-.293.707V19a1 1 0 0 0 1 1h2.586a1 1 0 0 0 .707-.293L18 10m-4-4 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-    rename.onclick = (e) => {
+    const menuWrap = document.createElement('div');
+    menuWrap.className = 'chat-menu-wrap';
+
+    const menuBtn = document.createElement('button');
+    menuBtn.className = 'chat-menu-btn';
+    menuBtn.type = 'button';
+    menuBtn.setAttribute('aria-label', 'Chat actions');
+    menuBtn.setAttribute('aria-haspopup', 'menu');
+    menuBtn.textContent = '⋯';
+
+    const menu = document.createElement('div');
+    menu.className = 'chat-menu hidden';
+    menu.setAttribute('role', 'menu');
+
+    const renameItem = document.createElement('button');
+    renameItem.type = 'button';
+    renameItem.className = 'chat-menu-item';
+    renameItem.setAttribute('role', 'menuitem');
+    renameItem.innerHTML =
+      '<span class="chat-menu-item-icon" aria-hidden="true">'
+      + '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg">'
+      + '<path d="m14 6 2.293-2.293a1 1 0 0 1 1.414 0l2.586 2.586a1 1 0 0 1 0 1.414L18 10m-4-4-9.707 9.707a1 1 0 0 0-.293.707V19a1 1 0 0 0 1 1h2.586a1 1 0 0 0 .707-.293L18 10m-4-4 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
+      + '</svg>'
+      + '</span>'
+      + '<span class="chat-menu-item-text">Rename</span>';
+
+    const deleteItem = document.createElement('button');
+    deleteItem.type = 'button';
+    deleteItem.className = 'chat-menu-item danger';
+    deleteItem.setAttribute('role', 'menuitem');
+    deleteItem.innerHTML =
+      '<span class="chat-menu-item-icon" aria-hidden="true">'
+      + '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg">'
+      + '<path d="M3 6h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
+      + '<path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
+      + '<path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
+      + '<path d="M10 11v6M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
+      + '</svg>'
+      + '</span>'
+      + '<span class="chat-menu-item-text">Delete</span>';
+
+    menu.appendChild(renameItem);
+    menu.appendChild(deleteItem);
+
+    let cleanupMenuEvents = null;
+
+    const closeMenu = () => {
+      menu.classList.add('hidden');
+      menuBtn.classList.remove('open');
+      menuBtn.setAttribute('aria-expanded', 'false');
+      if (cleanupMenuEvents) {
+        cleanupMenuEvents();
+        cleanupMenuEvents = null;
+      }
+    };
+
+    const openMenu = () => {
+      if (cleanupMenuEvents) {
+        cleanupMenuEvents();
+        cleanupMenuEvents = null;
+      }
+
+      menu.classList.remove('hidden');
+      menuBtn.classList.add('open');
+      menuBtn.setAttribute('aria-expanded', 'true');
+
+      const onDocClick = (ev) => {
+        if (!menuWrap.contains(ev.target)) closeMenu();
+      };
+
+      const onKeyDown = (ev) => {
+        if (ev.key === 'Escape') {
+          ev.preventDefault();
+          closeMenu();
+        }
+      };
+
+      window.addEventListener('click', onDocClick, true);
+      window.addEventListener('keydown', onKeyDown, true);
+
+      cleanupMenuEvents = () => {
+        window.removeEventListener('click', onDocClick, true);
+        window.removeEventListener('keydown', onKeyDown, true);
+      };
+    };
+
+    menuBtn.onclick = (e) => {
       e.stopPropagation();
+      if (!menu.classList.contains('hidden')) {
+        closeMenu();
+      } else {
+        openMenu();
+      }
+    };
+
+    menu.onclick = (e) => {
+      e.stopPropagation();
+    };
+
+    renameItem.onclick = (e) => {
+      e.stopPropagation();
+      closeMenu();
       onStartRename.begin(chat.id);
     };
-    actions.appendChild(rename);
 
-    const del = document.createElement('button');
-    del.className = 'chat-delete danger';
-    del.setAttribute('aria-label', 'Delete chat');
-    del.textContent = '✕';
-    del.onclick = async (e) => {
+    deleteItem.onclick = async (e) => {
       e.stopPropagation();
+      closeMenu();
       await onTrashChat(chat.id);
     };
-    actions.appendChild(del);
+
+    menuWrap.appendChild(menuBtn);
+    menuWrap.appendChild(menu);
+    actions.appendChild(menuWrap);
 
     item.appendChild(actions);
     els.chatListEl.appendChild(item);
