@@ -49,6 +49,10 @@ export function setSidebarSelection(state, next) {
     state.pendingNew = false;
     state.renamingId = null;
   }
+  if (next.kind === 'favorites') {
+    state.pendingNew = false;
+    state.renamingId = null;
+  }
   if (next.kind !== 'chat' || next.id !== TEMP_CHAT_ID) {
     state.temporaryChatEnabled = false;
     state.tempChat = null;

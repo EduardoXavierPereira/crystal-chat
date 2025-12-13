@@ -19,6 +19,7 @@ import {
 
 import { autosizePrompt, showError, hideError, openConfirm, closeConfirm } from './input.js';
 import { renderTrash } from './trash.js';
+import { renderFavorites } from './favorites.js';
 import { renderActiveChat } from './messages.js';
 
 const els = getEls();
@@ -51,6 +52,8 @@ async function init() {
   const savedSel = ui?.sidebarSelection;
   if (savedSel && savedSel.kind === 'trash') {
     state.sidebarSelection = { kind: 'trash' };
+  } else if (savedSel && savedSel.kind === 'favorites') {
+    state.sidebarSelection = { kind: 'favorites' };
   } else if (savedSel && savedSel.kind === 'chat') {
     if (savedSel.id === null) {
       state.sidebarSelection = { kind: 'chat', id: null };
@@ -93,6 +96,16 @@ function attachEvents() {
     if (nextKind === 'trash') {
       applySidebarSelection({ kind: 'trash' });
       if (els.trashSearchInput) els.trashSearchInput.focus();
+    } else {
+      applySidebarSelection({ kind: 'chat', id: state.chats[0]?.id || null });
+      els.promptInput?.focus();
+    }
+  });
+
+  els.favoritesBtn?.addEventListener('click', () => {
+    const nextKind = state.sidebarSelection.kind === 'favorites' ? 'chat' : 'favorites';
+    if (nextKind === 'favorites') {
+      applySidebarSelection({ kind: 'favorites' });
     } else {
       applySidebarSelection({ kind: 'chat', id: state.chats[0]?.id || null });
       els.promptInput?.focus();
@@ -177,7 +190,38 @@ function renderChatsUI() {
         await commitRename(id, title);
       }
     },
-    onTrashChat: handleTrashChat
+    onTrashChat: handleTrashChat,
+    onToggleFavorite: toggleFavorite
+  });
+}
+
+async function toggleFavorite(id) {
+  const chat = state.chats.find((c) => c.id === id);
+  if (!chat) return;
+  if (chat.favoriteAt) {
+    delete chat.favoriteAt;
+  } else {
+    chat.favoriteAt = Date.now();
+  }
+  await saveChat(db, chat);
+  renderChatsUI();
+  renderActiveChatUI();
+}
+
+function getFavoriteChats() {
+  return (state.chats || [])
+    .filter((c) => !c.deletedAt && !!c.favoriteAt)
+    .sort((a, b) => (b.favoriteAt || 0) - (a.favoriteAt || 0));
+}
+
+function renderFavoritesUI() {
+  renderFavorites({
+    els,
+    favoriteChats: getFavoriteChats(),
+    onOpenChat: (id) => {
+      applySidebarSelection({ kind: 'chat', id });
+      els.promptInput?.focus();
+    }
   });
 }
 
@@ -206,6 +250,10 @@ function renderActiveChatUI() {
     renderTrashUI().catch(() => {
       // ignore
     });
+  }
+
+  if (state.sidebarSelection.kind === 'favorites') {
+    renderFavoritesUI();
   }
 }
 

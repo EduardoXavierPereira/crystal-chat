@@ -79,11 +79,13 @@ export function renderActiveChat({ els, state, tempChatId, tempChat, typingIndic
   const chat = activeChatId === tempChatId ? tempChat : state.chats.find((c) => c.id === activeChatId);
 
   if (els.trashViewEl) els.trashViewEl.classList.toggle('hidden', state.sidebarSelection.kind !== 'trash');
-  if (els.messagesEl) els.messagesEl.classList.toggle('hidden', state.sidebarSelection.kind === 'trash');
-  if (els.promptForm) els.promptForm.classList.toggle('hidden', state.sidebarSelection.kind === 'trash');
-  if (els.errorEl) els.errorEl.classList.toggle('hidden', state.sidebarSelection.kind === 'trash' || els.errorEl.textContent === '');
+  if (els.favoritesViewEl) els.favoritesViewEl.classList.toggle('hidden', state.sidebarSelection.kind !== 'favorites');
+  const inChat = state.sidebarSelection.kind === 'chat';
+  if (els.messagesEl) els.messagesEl.classList.toggle('hidden', !inChat);
+  if (els.promptForm) els.promptForm.classList.toggle('hidden', !inChat);
+  if (els.errorEl) els.errorEl.classList.toggle('hidden', !inChat || els.errorEl.textContent === '');
 
-  if (state.sidebarSelection.kind === 'trash') {
+  if (!inChat) {
     return;
   }
 

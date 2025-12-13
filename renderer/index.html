@@ -12,6 +12,14 @@
         <div class="sidebar-header">
           <button id="new-chat" class="button button-ghost full-width">+ New chat</button>
         </div>
+        <button id="favorites-btn" class="button button-ghost full-width">
+          <span class="icon-text">
+            <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 17.27l-5.18 2.73 1-5.85L3.64 9.24l5.9-.86L12 3l2.46 5.38 5.9.86-4.18 4.91 1 5.85L12 17.27Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+            </svg>
+            Favorites
+          </span>
+        </button>
         <div id="chat-list" class="chat-list"></div>
         <button id="trash-btn" class="button button-ghost full-width">
           <span class="icon-text">
@@ -27,6 +35,19 @@
         </button>
       </aside>
       <main class="chat-area">
+        <section id="favorites-view" class="favorites-view hidden">
+          <div class="favorites-header">
+            <div class="favorites-title">
+              <span class="icon-text">
+                <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 17.27l-5.18 2.73 1-5.85L3.64 9.24l5.9-.86L12 3l2.46 5.38 5.9.86-4.18 4.91 1 5.85L12 17.27Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                </svg>
+                Favorites
+              </span>
+            </div>
+          </div>
+          <div id="favorites-list" class="favorites-list"></div>
+        </section>
         <section id="trash-view" class="trash-view hidden">
           <div class="trash-header">
             <div class="trash-title">
