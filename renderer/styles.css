@@ -616,7 +616,7 @@ body {
   gap: 12px;
   min-height: 0;
   flex: 1;
-  padding-right: 10px;
+  padding: 18px 18px 18px 18px;
 }
 
 .trash-header {
@@ -646,6 +646,7 @@ body {
 .trash-search {
   display: flex;
   align-items: center;
+  margin-top: 2px;
 }
 
 .trash-search-input {
@@ -669,6 +670,7 @@ body {
   gap: 8px;
   overflow-y: auto;
   min-height: 0;
+  padding-bottom: 18px;
 }
 
 .trash-item {
@@ -716,7 +718,8 @@ body {
 .trash-empty {
   color: var(--muted);
   text-align: center;
-  padding: 24px 12px;
+  padding: 28px 12px;
+  margin-top: 18px;
 }
 
 .modal-overlay {
