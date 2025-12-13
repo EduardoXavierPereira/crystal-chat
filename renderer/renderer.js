@@ -10,12 +10,31 @@ const errorEl = document.getElementById('error');
 const newChatBtn = document.getElementById('new-chat');
 const statusEl = document.getElementById('status');
 
+const trashBtn = document.getElementById('trash-btn');
+const trashViewEl = document.getElementById('trash-view');
+const trashListEl = document.getElementById('trash-list');
+const trashSearchInput = document.getElementById('trash-search-input');
+const trashRestoreAllBtn = document.getElementById('trash-restore-all');
+const trashDeleteAllBtn = document.getElementById('trash-delete-all');
+
+const confirmModalEl = document.getElementById('confirm-modal');
+const confirmMessageEl = document.getElementById('confirm-message');
+const confirmCancelBtn = document.getElementById('confirm-cancel');
+const confirmOkBtn = document.getElementById('confirm-ok');
+
 let db;
 let chats = [];
 let activeChatId = null;
 let isStreaming = false;
 let pendingNew = false;
 let renamingId = null;
+
+let activeView = 'chat';
+let trashQuery = '';
+
+let confirmAction = null;
+
+const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 function autosizePrompt() {
   if (!promptInput) return;
@@ -41,6 +60,12 @@ async function init() {
     console.warn('[scrollbar] ::-webkit-scrollbar NOT supported/ignored by this build', e);
   }
   await openDB();
+  await purgeExpiredTrashedChats();
+  setInterval(() => {
+    purgeExpiredTrashedChats().catch(() => {
+      // ignore
+    });
+  }, 6 * 60 * 60 * 1000);
   chats = await loadChats();
   activeChatId = chats[0]?.id || null;
   renderChats();
@@ -64,12 +89,76 @@ function attachEvents() {
   newChatBtn.addEventListener('click', async () => {
     activeChatId = null;
     pendingNew = true;
+    activeView = 'chat';
     renderChats();
     renderActiveChat();
     promptInput.value = '';
     autosizePrompt();
     promptInput.focus();
   });
+
+  trashBtn?.addEventListener('click', () => {
+    const nextView = activeView === 'trash' ? 'chat' : 'trash';
+    activeView = nextView;
+    if (nextView === 'trash') {
+      pendingNew = false;
+      renamingId = null;
+      activeChatId = null;
+      if (trashSearchInput) trashSearchInput.focus();
+    } else {
+      if (!activeChatId) activeChatId = chats[0]?.id || null;
+      promptInput?.focus();
+    }
+    renderChats();
+    renderActiveChat();
+  });
+
+  trashSearchInput?.addEventListener('input', () => {
+    trashQuery = (trashSearchInput.value || '').trim().toLowerCase();
+    renderTrash();
+  });
+
+  trashRestoreAllBtn?.addEventListener('click', async () => {
+    await restoreAllTrashedChats();
+  });
+
+  trashDeleteAllBtn?.addEventListener('click', async () => {
+    await requestDeleteAllTrashed();
+  });
+
+  confirmCancelBtn?.addEventListener('click', () => {
+    closeConfirm();
+  });
+
+  confirmOkBtn?.addEventListener('click', async () => {
+    const action = confirmAction;
+    closeConfirm();
+    if (typeof action === 'function') {
+      await action();
+    }
+  });
+
+  confirmModalEl?.addEventListener('click', (e) => {
+    if (e.target === confirmModalEl) closeConfirm();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && confirmModalEl && !confirmModalEl.classList.contains('hidden')) {
+      closeConfirm();
+    }
+  });
+}
+
+function openConfirm(message, onConfirm) {
+  confirmAction = onConfirm;
+  if (confirmMessageEl) confirmMessageEl.textContent = message;
+  confirmModalEl?.classList.remove('hidden');
+  confirmCancelBtn?.focus();
+}
+
+function closeConfirm() {
+  confirmAction = null;
+  confirmModalEl?.classList.add('hidden');
 }
 
 function openDB() {
@@ -96,8 +185,9 @@ function loadChats() {
     const store = tx.objectStore('chats');
     const req = store.getAll();
     req.onsuccess = () => {
-      const sorted = (req.result || []).sort((a, b) => b.createdAt - a.createdAt);
-      resolve(sorted);
+      const sorted = (req.result || []).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      const active = sorted.filter((c) => !c.deletedAt);
+      resolve(active);
     };
     req.onerror = () => reject(req.error);
   });
@@ -113,6 +203,21 @@ function saveChat(chat) {
   });
 }
 
+function loadTrashedChats() {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('chats', 'readonly');
+    const store = tx.objectStore('chats');
+    const req = store.getAll();
+    req.onsuccess = () => {
+      const items = (req.result || [])
+        .filter((c) => !!c.deletedAt)
+        .sort((a, b) => (b.deletedAt || 0) - (a.deletedAt || 0));
+      resolve(items);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
 function deleteChat(id) {
   return new Promise((resolve, reject) => {
     const tx = db.transaction('chats', 'readwrite');
@@ -121,6 +226,14 @@ function deleteChat(id) {
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
   });
+}
+
+async function purgeExpiredTrashedChats() {
+  const now = Date.now();
+  const trashed = await loadTrashedChats();
+  const expired = trashed.filter((c) => (c.deletedAt || 0) + TRASH_RETENTION_MS <= now);
+  if (expired.length === 0) return;
+  await Promise.all(expired.map((c) => deleteChat(c.id)));
 }
 
 async function createChat(title) {
@@ -138,12 +251,14 @@ async function createChat(title) {
 
 function setActiveChat(id) {
   activeChatId = id;
+  activeView = 'chat';
   renderChats();
   renderActiveChat();
 }
 
 function renderChats() {
   chatListEl.innerHTML = '';
+  trashBtn?.classList.toggle('active', activeView === 'trash');
   chats.forEach((chat) => {
     const item = document.createElement('div');
     item.className = `chat-item ${chat.id === activeChatId ? 'active' : ''}`;
@@ -196,18 +311,77 @@ function renderChats() {
     actions.appendChild(rename);
 
     const del = document.createElement('button');
-    del.className = 'chat-delete';
+    del.className = 'chat-delete danger';
     del.setAttribute('aria-label', 'Delete chat');
     del.textContent = '✕';
     del.onclick = async (e) => {
       e.stopPropagation();
-      await handleDeleteChat(chat.id);
+      await handleTrashChat(chat.id);
     };
     actions.appendChild(del);
 
     item.appendChild(actions);
 
     chatListEl.appendChild(item);
+  });
+}
+
+function renderTrash() {
+  if (!trashListEl) return;
+  trashListEl.innerHTML = '';
+
+  loadTrashedChats().then((trashed) => {
+    const filtered = !trashQuery
+      ? trashed
+      : trashed.filter((c) => {
+          const title = (chatTitleFromMessages(c) || '').toLowerCase();
+          const msgText = (c.messages || [])
+            .slice(0, 10)
+            .map((m) => m.content || '')
+            .join(' ')
+            .toLowerCase();
+          return title.includes(trashQuery) || msgText.includes(trashQuery);
+        });
+
+    if (filtered.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'trash-empty';
+      empty.textContent = trashed.length === 0 ? 'Trash is empty.' : 'No matches.';
+      trashListEl.appendChild(empty);
+      return;
+    }
+
+    filtered.forEach((chat) => {
+      const row = document.createElement('div');
+      row.className = 'trash-item';
+
+      const name = document.createElement('div');
+      name.className = 'trash-name';
+      name.textContent = chatTitleFromMessages(chat);
+      row.appendChild(name);
+
+      const actions = document.createElement('div');
+      actions.className = 'trash-item-actions';
+
+      const restore = document.createElement('button');
+      restore.className = 'trash-restore';
+      restore.textContent = 'Restore';
+      restore.onclick = async () => {
+        await restoreChat(chat.id);
+      };
+      actions.appendChild(restore);
+
+      const del = document.createElement('button');
+      del.className = 'trash-delete danger';
+      del.textContent = 'Delete';
+      del.onclick = async () => {
+        await deleteChatPermanently(chat.id);
+      };
+      actions.appendChild(del);
+
+      row.appendChild(actions);
+      trashListEl.appendChild(row);
+    });
   });
 }
 
@@ -262,9 +436,19 @@ function renderMessageElement(msg) {
 
 function renderActiveChat() {
   const chat = chats.find((c) => c.id === activeChatId);
+
+  if (trashViewEl) trashViewEl.classList.toggle('hidden', activeView !== 'trash');
+  if (messagesEl) messagesEl.classList.toggle('hidden', activeView === 'trash');
+  if (promptForm) promptForm.classList.toggle('hidden', activeView === 'trash');
+  if (errorEl) errorEl.classList.toggle('hidden', activeView === 'trash' || errorEl.textContent === '');
+
+  if (activeView === 'trash') {
+    renderTrash();
+    return;
+  }
+
   messagesEl.innerHTML = '';
   messagesEl.classList.toggle('empty', false);
-  if (newChatBtn) newChatBtn.classList.toggle('hidden', !chat);
 
   if (!chat) {
     const empty = document.createElement('div');
@@ -275,7 +459,7 @@ function renderActiveChat() {
     const suggestions = [
       'What can you do?',
       'What are your limitations?',
-      'How can I learn to work with you?',
+      'Teach me how to prompt AI.',
       'How do you work behind the scenes?'
     ];
 
@@ -311,12 +495,12 @@ function renderActiveChat() {
     messagesEl.appendChild(renderMessageElement(msg));
   });
   messagesEl.appendChild(typingIndicator);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
 async function handleSubmit(event) {
   event.preventDefault();
   if (isStreaming) return;
+  if (activeView !== 'chat') return;
 
   const content = promptInput.value.trim();
   if (!content) return;
@@ -343,7 +527,14 @@ async function handleSubmit(event) {
 }
 
 async function handleDeleteChat(id) {
-  await deleteChat(id);
+  await handleTrashChat(id);
+}
+
+async function handleTrashChat(id) {
+  const chat = chats.find((c) => c.id === id);
+  if (!chat) return;
+  chat.deletedAt = Date.now();
+  await saveChat(chat);
   chats = chats.filter((c) => c.id !== id);
   if (renamingId === id) renamingId = null;
   if (activeChatId === id) {
@@ -351,6 +542,59 @@ async function handleDeleteChat(id) {
   }
   renderChats();
   renderActiveChat();
+}
+
+async function restoreChat(id) {
+  const trashed = await loadTrashedChats();
+  const chat = trashed.find((c) => c.id === id);
+  if (!chat) return;
+  delete chat.deletedAt;
+  await saveChat(chat);
+  await purgeExpiredTrashedChats();
+  chats = await loadChats();
+  if (!activeChatId) activeChatId = chats[0]?.id || null;
+  renderChats();
+  renderTrash();
+}
+
+async function deleteChatPermanently(id) {
+  await deleteChat(id);
+  await purgeExpiredTrashedChats();
+  renderTrash();
+}
+
+async function restoreAllTrashedChats() {
+  const trashed = await loadTrashedChats();
+  if (trashed.length === 0) return;
+  await Promise.all(
+    trashed.map(async (chat) => {
+      delete chat.deletedAt;
+      await saveChat(chat);
+    })
+  );
+  chats = await loadChats();
+  if (!activeChatId) activeChatId = chats[0]?.id || null;
+  renderChats();
+  renderTrash();
+}
+
+async function deleteAllTrashedChatsPermanently() {
+  const trashed = await loadTrashedChats();
+  if (trashed.length === 0) return;
+  await Promise.all(trashed.map((c) => deleteChat(c.id)));
+  renderTrash();
+}
+
+async function requestDeleteAllTrashed() {
+  const trashed = await loadTrashedChats();
+  if (trashed.length === 0) return;
+  if (trashed.length === 1) {
+    await deleteAllTrashedChatsPermanently();
+    return;
+  }
+  openConfirm(`Delete ${trashed.length} chats permanently? This cannot be undone.`, async () => {
+    await deleteAllTrashedChatsPermanently();
+  });
 }
 
 async function commitRename(id, title) {

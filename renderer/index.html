@@ -13,8 +13,55 @@
           <button id="new-chat" class="button button-ghost full-width">+ New chat</button>
         </div>
         <div id="chat-list" class="chat-list"></div>
+        <button id="trash-btn" class="button button-ghost full-width">
+          <span class="icon-text">
+            <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M10 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M6 7l1 14h10l1-14" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+              <path d="M9 7V4h6v3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+            </svg>
+            Trash
+          </span>
+        </button>
       </aside>
       <main class="chat-area">
+        <section id="trash-view" class="trash-view hidden">
+          <div class="trash-header">
+            <div class="trash-title">
+              <span class="icon-text">
+                <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M10 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M6 7l1 14h10l1-14" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                  <path d="M9 7V4h6v3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                </svg>
+                Trash
+              </span>
+            </div>
+            <div class="trash-actions">
+              <button id="trash-restore-all" class="button button-ghost">Restore all</button>
+              <button id="trash-delete-all" class="button button-ghost danger">Delete all</button>
+            </div>
+          </div>
+          <div class="trash-note">Chats in Trash are permanently deleted after 30 days.</div>
+          <div class="trash-search">
+            <input id="trash-search-input" class="trash-search-input" type="text" placeholder="Search trash..." />
+          </div>
+          <div id="trash-list" class="trash-list"></div>
+        </section>
+        <div id="confirm-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+          <div class="modal">
+            <div id="confirm-title" class="modal-title">Confirm</div>
+            <div id="confirm-message" class="modal-message"></div>
+            <div class="modal-actions">
+              <button id="confirm-cancel" class="button button-ghost">Cancel</button>
+              <button id="confirm-ok" class="button button-ghost danger">Delete permanently</button>
+            </div>
+          </div>
+        </div>
         <section id="messages" class="messages">
           <div id="typing-indicator" class="typing chat-typing hidden">
             <div class="spinner"></div>
