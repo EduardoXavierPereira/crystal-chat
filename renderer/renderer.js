@@ -342,7 +342,14 @@ async function commitRename(id, title) {
 async function streamAssistant(chat) {
   state.isStreaming = true;
   els.typingIndicator.classList.remove('hidden');
-  const assistantMsg = { role: 'assistant', content: '' };
+  const assistantMsg = {
+    role: 'assistant',
+    content: '',
+    thinking: '',
+    _thinkingActive: false,
+    _thinkingOpen: false,
+    _thinkingUserToggled: false
+  };
   chat.messages.push(assistantMsg);
   renderActiveChatUI();
   try {
@@ -350,7 +357,22 @@ async function streamAssistant(chat) {
       apiUrl: API_URL,
       model: MODEL,
       messages: chat.messages,
+      onThinking: (token) => {
+        if (!assistantMsg._thinkingActive) {
+          assistantMsg._thinkingActive = true;
+          assistantMsg._thinkingOpen = true;
+          assistantMsg._thinkingUserToggled = false;
+        }
+        assistantMsg.thinking += token;
+        renderActiveChatUI();
+      },
       onToken: (token) => {
+        if (assistantMsg._thinkingActive) {
+          assistantMsg._thinkingActive = false;
+          if (!assistantMsg._thinkingUserToggled) {
+            assistantMsg._thinkingOpen = false;
+          }
+        }
         assistantMsg.content += token;
         renderActiveChatUI();
       }

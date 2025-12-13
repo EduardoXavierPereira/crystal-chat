@@ -1,10 +1,11 @@
-export async function streamChat({ apiUrl, model, messages, onToken }) {
+export async function streamChat({ apiUrl, model, messages, onToken, onThinking }) {
   const res = await fetch(apiUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model,
       messages: messages.map(({ role, content }) => ({ role, content })),
+      think: true,
       stream: true
     })
   });
@@ -39,6 +40,9 @@ export async function streamChat({ apiUrl, model, messages, onToken }) {
       }
 
       if (json.error) throw new Error(json.error);
+      if (json.message && json.message.thinking) {
+        onThinking?.(json.message.thinking);
+      }
       if (json.message && json.message.content) {
         onToken?.(json.message.content);
       }

@@ -34,6 +34,42 @@ export function renderMessageElement(msg) {
   }
 
   div.appendChild(header);
+  if (msg.role === 'assistant' && (msg.thinking || msg._thinkingActive)) {
+    const thinkingWrap = document.createElement('div');
+    thinkingWrap.className = 'thinking';
+
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'thinking-toggle';
+    const toggleText = document.createElement('span');
+    toggleText.className = 'thinking-toggle-text';
+    toggleText.textContent = msg._thinkingActive ? 'Thinking…' : 'Thinking';
+
+    const chevron = document.createElement('span');
+    chevron.className = 'thinking-chevron';
+    chevron.setAttribute('aria-hidden', 'true');
+    chevron.textContent = '▸';
+
+    toggle.onclick = () => {
+      msg._thinkingOpen = !msg._thinkingOpen;
+      msg._thinkingUserToggled = true;
+      body.classList.toggle('hidden', !msg._thinkingOpen);
+      toggle.classList.toggle('open', !!msg._thinkingOpen);
+    };
+
+    toggle.classList.toggle('open', !!msg._thinkingOpen);
+    toggle.appendChild(toggleText);
+    toggle.appendChild(chevron);
+
+    const body = document.createElement('pre');
+    body.className = 'thinking-body';
+    body.textContent = msg.thinking || '';
+    body.classList.toggle('hidden', !msg._thinkingOpen);
+
+    thinkingWrap.appendChild(toggle);
+    thinkingWrap.appendChild(body);
+    div.appendChild(thinkingWrap);
+  }
   div.appendChild(content);
   return div;
 }
