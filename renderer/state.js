@@ -15,6 +15,7 @@ export function createInitialState() {
     confirmAction: null,
     temporaryChatEnabled: false,
     tempChat: null,
+    pinnedOpen: false,
     sidebarSelection: { kind: 'chat', id: null }
   };
 }
@@ -22,6 +23,7 @@ export function createInitialState() {
 export function saveUIState(state) {
   try {
     const toSave = {
+      pinnedOpen: !!state.pinnedOpen,
       sidebarSelection:
         state.sidebarSelection.kind === 'chat' && state.sidebarSelection.id === TEMP_CHAT_ID
           ? { kind: 'chat', id: null }
@@ -46,10 +48,6 @@ export function loadUIState() {
 export function setSidebarSelection(state, next) {
   state.sidebarSelection = next;
   if (next.kind === 'trash') {
-    state.pendingNew = false;
-    state.renamingId = null;
-  }
-  if (next.kind === 'favorites') {
     state.pendingNew = false;
     state.renamingId = null;
   }

@@ -19,7 +19,7 @@ import {
 
 import { autosizePrompt, showError, hideError, openConfirm, closeConfirm } from './input.js';
 import { renderTrash } from './trash.js';
-import { renderFavorites } from './favorites.js';
+import { renderPinnedDropdown } from './pinned.js';
 import { renderActiveChat } from './messages.js';
 
 const els = getEls();
@@ -50,10 +50,24 @@ async function init() {
   state.chats = await loadChats(db);
   const ui = loadUIState();
   const savedSel = ui?.sidebarSelection;
+  state.pinnedOpen = !!(ui?.pinnedOpen ?? ui?.favoritesOpen);
+
+  const migrated = [];
+  state.chats.forEach((chat) => {
+    if (chat.favoriteAt && !chat.pinnedAt) {
+      chat.pinnedAt = chat.favoriteAt;
+      delete chat.favoriteAt;
+      migrated.push(chat);
+    }
+  });
+
+  if (migrated.length > 0) {
+    await Promise.all(migrated.map((c) => saveChat(db, c)));
+  }
   if (savedSel && savedSel.kind === 'trash') {
     state.sidebarSelection = { kind: 'trash' };
   } else if (savedSel && savedSel.kind === 'favorites') {
-    state.sidebarSelection = { kind: 'favorites' };
+    state.sidebarSelection = { kind: 'chat', id: state.chats[0]?.id || null };
   } else if (savedSel && savedSel.kind === 'chat') {
     if (savedSel.id === null) {
       state.sidebarSelection = { kind: 'chat', id: null };
@@ -102,14 +116,10 @@ function attachEvents() {
     }
   });
 
-  els.favoritesBtn?.addEventListener('click', () => {
-    const nextKind = state.sidebarSelection.kind === 'favorites' ? 'chat' : 'favorites';
-    if (nextKind === 'favorites') {
-      applySidebarSelection({ kind: 'favorites' });
-    } else {
-      applySidebarSelection({ kind: 'chat', id: state.chats[0]?.id || null });
-      els.promptInput?.focus();
-    }
+  els.pinnedBtn?.addEventListener('click', () => {
+    state.pinnedOpen = !state.pinnedOpen;
+    saveUIState(state);
+    renderChatsUI();
   });
 
   els.trashSearchInput?.addEventListener('input', () => {
@@ -191,33 +201,41 @@ function renderChatsUI() {
       }
     },
     onTrashChat: handleTrashChat,
-    onToggleFavorite: toggleFavorite
+    onTogglePinned: togglePinned
   });
+
+  renderPinnedDropdownUI();
 }
 
-async function toggleFavorite(id) {
+async function togglePinned(id) {
   const chat = state.chats.find((c) => c.id === id);
   if (!chat) return;
-  if (chat.favoriteAt) {
+  if (chat.pinnedAt || chat.favoriteAt) {
+    delete chat.pinnedAt;
     delete chat.favoriteAt;
   } else {
-    chat.favoriteAt = Date.now();
+    chat.pinnedAt = Date.now();
   }
   await saveChat(db, chat);
   renderChatsUI();
   renderActiveChatUI();
 }
 
-function getFavoriteChats() {
+function getPinnedChats() {
   return (state.chats || [])
-    .filter((c) => !c.deletedAt && !!c.favoriteAt)
-    .sort((a, b) => (b.favoriteAt || 0) - (a.favoriteAt || 0));
+    .filter((c) => !c.deletedAt && !!c.pinnedAt)
+    .sort((a, b) => (b.pinnedAt || 0) - (a.pinnedAt || 0));
 }
 
-function renderFavoritesUI() {
-  renderFavorites({
+function renderPinnedDropdownUI() {
+  if (els.pinnedDropdownEl) {
+    els.pinnedDropdownEl.classList.toggle('hidden', !state.pinnedOpen);
+  }
+  if (!state.pinnedOpen) return;
+
+  renderPinnedDropdown({
     els,
-    favoriteChats: getFavoriteChats(),
+    pinnedChats: getPinnedChats(),
     onOpenChat: (id) => {
       applySidebarSelection({ kind: 'chat', id });
       els.promptInput?.focus();
@@ -250,10 +268,6 @@ function renderActiveChatUI() {
     renderTrashUI().catch(() => {
       // ignore
     });
-  }
-
-  if (state.sidebarSelection.kind === 'favorites') {
-    renderFavoritesUI();
   }
 }
 

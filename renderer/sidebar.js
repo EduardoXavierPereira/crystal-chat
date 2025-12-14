@@ -7,9 +7,9 @@ export function getEls() {
     typingIndicator: document.getElementById('typing-indicator'),
     errorEl: document.getElementById('error'),
     newChatBtn: document.getElementById('new-chat'),
-    favoritesBtn: document.getElementById('favorites-btn'),
-    favoritesViewEl: document.getElementById('favorites-view'),
-    favoritesListEl: document.getElementById('favorites-list'),
+    pinnedBtn: document.getElementById('pinned-btn'),
+    pinnedDropdownEl: document.getElementById('pinned-dropdown'),
+    pinnedDropdownListEl: document.getElementById('pinned-dropdown-list'),
     statusEl: document.getElementById('status'),
     trashBtn: document.getElementById('trash-btn'),
     trashViewEl: document.getElementById('trash-view'),
@@ -35,10 +35,11 @@ export function chatTitleFromMessages(chat) {
   return trimmed.slice(0, 32) + (trimmed.length > 32 ? '…' : '');
 }
 
-export function renderChats({ els, state, onSetActiveChat, onStartRename, onTrashChat, onToggleFavorite }) {
+export function renderChats({ els, state, onSetActiveChat, onStartRename, onTrashChat, onTogglePinned }) {
   els.chatListEl.innerHTML = '';
   els.trashBtn?.classList.toggle('active', state.sidebarSelection.kind === 'trash');
-  els.favoritesBtn?.classList.toggle('active', state.sidebarSelection.kind === 'favorites');
+  els.pinnedBtn?.classList.toggle('active', !!state.pinnedOpen);
+  els.pinnedBtn?.classList.toggle('open', !!state.pinnedOpen);
 
   state.chats.forEach((chat) => {
     const item = document.createElement('div');
@@ -92,7 +93,7 @@ export function renderChats({ els, state, onSetActiveChat, onStartRename, onTras
     menu.className = 'chat-menu hidden';
     menu.setAttribute('role', 'menu');
 
-    const isFavorite = !!chat.favoriteAt;
+    const isPinned = !!chat.pinnedAt;
     const favoriteItem = document.createElement('button');
     favoriteItem.type = 'button';
     favoriteItem.className = 'chat-menu-item';
@@ -103,7 +104,7 @@ export function renderChats({ els, state, onSetActiveChat, onStartRename, onTras
       + '<path d="M12 17.27l-5.18 2.73 1-5.85L3.64 9.24l5.9-.86L12 3l2.46 5.38 5.9.86-4.18 4.91 1 5.85L12 17.27Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>'
       + '</svg>'
       + '</span>'
-      + `<span class="chat-menu-item-text">${isFavorite ? 'Remove from favorites' : 'Add to favorites'}</span>`;
+      + `<span class="chat-menu-item-text">${isPinned ? 'Unpin chat' : 'Pin chat'}</span>`;
 
     const renameItem = document.createElement('button');
     renameItem.type = 'button';
@@ -194,7 +195,7 @@ export function renderChats({ els, state, onSetActiveChat, onStartRename, onTras
     favoriteItem.onclick = async (e) => {
       e.stopPropagation();
       closeMenu();
-      await onToggleFavorite?.(chat.id);
+      await onTogglePinned?.(chat.id);
     };
 
     renameItem.onclick = (e) => {
