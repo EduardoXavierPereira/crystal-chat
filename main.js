@@ -261,6 +261,9 @@ async function ensureOllamaServer() {
 
   for (let i = 0; i < 20; i++) {
     if (await isOllamaServerReachable()) return { ok: true };
+    // Internal progress signal (renderer parses % but does not show logs).
+    const pct = Math.round(((i + 1) / 20) * 100);
+    sendSetupProgress({ kind: 'log', stream: 'stdout', line: `${pct}%` });
     await sleep(500);
   }
   return { ok: false, reason: 'server_unreachable' };

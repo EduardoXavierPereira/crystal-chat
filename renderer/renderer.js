@@ -22,23 +22,23 @@ import { renderPinnedDropdown } from './pinned.js';
 import { renderActiveChat, updateRenderedMessage } from './messages.js';
 import { createCustomDropdown } from './customDropdown.js';
 import { formatModelName } from './formatModelName.js';
+import { createTrashActions } from './trashActions.js';
+import { createPinnedActions } from './pinnedActions.js';
+import { createChatSidebarController } from './chatSidebarController.js';
+import { createStreamingController } from './streamingController.js';
 
 const els = getEls();
 const state = createInitialState();
 
 let runtimeApiUrl = null;
 
-let streamAbortController = null;
-
-let spinnerRafId = null;
-let spinnerLastTs = 0;
-let spinnerAngle = 0;
-
 let db;
 
 let setupUnsub = null;
 let initCompleted = false;
 let setupSucceeded = false;
+
+let setupLastPullLoggedPct = null;
 
 let modelInstallUnsub = null;
 let modelInstallActive = false;
@@ -47,7 +47,15 @@ let modelInstallTarget = null;
 
 let modelDropdown = null;
 
-const MODEL_OPTIONS = ['qwen3:0.6b', 'qwen3:1.7b', 'qwen3:4b', 'qwen3:8b'].map((m) => ({
+let trashActions = null;
+
+let pinnedActions = null;
+
+let chatSidebarController = null;
+
+let streamingController = null;
+
+const MODEL_OPTIONS = ['qwen3:1.7b', 'qwen3:4b', 'qwen3:8b'].map((m) => ({
   value: m,
   label: formatModelName(m)
 }));
@@ -101,6 +109,17 @@ function updatePromptPlaceholder() {
   els.promptInput.placeholder = `Message ${label}`;
 }
 
+function updateSendButtonEnabled() {
+  if (!els.sendBtn || !els.promptInput) return;
+  // While streaming, the send button acts as a pause/cancel control.
+  if (state.isStreaming) {
+    els.sendBtn.disabled = false;
+    return;
+  }
+  const hasText = !!(els.promptInput.value || '').toString().trim();
+  els.sendBtn.disabled = !hasText;
+}
+
 function setRandomnessSliderFill() {
   if (!els.creativitySlider) return;
   const min = clampNumber(els.creativitySlider.min, 0, 2, 0);
@@ -131,7 +150,7 @@ async function ensureModelInstalled(model) {
         setModelInstallUI({ visible: true, label: msg, percent: modelInstallPercent });
       }
       if (payload.kind === 'log' && typeof payload.line === 'string') {
-        const m = payload.line.match(/(\d{1,3})\s*%/);
+        const m = payload.line.match(/(\d{1,3}(?:\.\d+)?)\s*%/);
         if (m) {
           modelInstallPercent = Math.max(0, Math.min(100, Number(m[1])));
           setModelInstallUI({ visible: true, label: `Downloading ${modelInstallTarget || ''}…`, percent: modelInstallPercent });
@@ -230,15 +249,18 @@ function computeOverallPercent() {
     const st = setupStepState[s.key].status;
     if (st === 'done') sum += s.weight;
     if (st === 'active') {
-      if (s.key === 'pull-model') {
-        sum += (s.weight * (setupStagePercent[s.key] || 0)) / 100;
-      } else {
-        // Discrete progress for non-download steps.
-        sum += s.weight * 0.5;
-      }
+      // If we have a percent signal for the currently active step, use it.
+      sum += (s.weight * (setupStagePercent[s.key] || 0)) / 100;
     }
   }
   return total > 0 ? Math.round((sum / total) * 100) : 0;
+}
+
+function getActiveSetupStepKey() {
+  for (const s of SETUP_STEPS) {
+    if (setupStepState[s.key]?.status === 'active') return s.key;
+  }
+  return null;
 }
 
 function setStepStatus(stepKey, status, detail = '') {
@@ -279,9 +301,53 @@ function showSetupModal(message) {
   }
 }
 
+function setSetupMainMessageForStage(stage) {
+  if (!els.setupMessageEl) return;
+  if (stage === 'install') {
+    els.setupMessageEl.textContent =
+      'Crystal Chat uses Ollama to run the AI model locally on your computer. Installing Ollama…';
+    return;
+  }
+  if (stage === 'start-server') {
+    els.setupMessageEl.textContent = 'Starting server…';
+    return;
+  }
+  if (stage === 'pull-model') {
+    els.setupMessageEl.textContent = 'Downloading model…';
+    return;
+  }
+  if (stage === 'finalize') {
+    els.setupMessageEl.textContent = 'Finalizing setup…';
+    return;
+  }
+}
+
+function setSetupRetryEnabled(enabled) {
+  if (!els.setupRetryBtn) return;
+  els.setupRetryBtn.disabled = !enabled;
+}
+
 function hideSetupModal() {
   if (!els.setupModalEl) return;
   els.setupModalEl.classList.add('hidden');
+}
+
+function appendSetupLogLine(line) {
+  if (els.setupMessageEl) {
+    const current = (els.setupMessageEl.textContent || '').toString();
+    els.setupMessageEl.textContent = current ? current + '\n' + line : line;
+  }
+}
+
+function isNoisyCliProgressLine(line) {
+  const s = (line || '').toString().trim();
+  if (!s) return true;
+  // Common curl --progress-bar artifacts (prints lots of # and token fragments)
+  if (/^#(=|#|O|-|\s)*$/.test(s)) return true;
+  if (/^##O[=#-]?\s*$/.test(s)) return true;
+  // Fractional percent updates are handled by the % parser; don't spam the log.
+  if (/^\d+(\.\d+)?%$/.test(s)) return true;
+  return false;
 }
 
 async function ensureOllamaAndModel() {
@@ -293,6 +359,7 @@ async function ensureOllamaAndModel() {
   setSetupOverallProgress({ label: `Checking dependencies for ${MODEL}…`, percent: 0 });
   setupSucceeded = false;
   if (els.setupCloseBtn) els.setupCloseBtn.disabled = true;
+  setSetupRetryEnabled(false);
 
   if (!setupUnsub && api.onOllamaSetupProgress) {
     setupUnsub = api.onOllamaSetupProgress((payload) => {
@@ -301,6 +368,7 @@ async function ensureOllamaAndModel() {
       if (payload.kind === 'stage') {
         const stage = payload.stage;
         if (stage && setupStepState[stage]) {
+          setSetupMainMessageForStage(stage);
           // mark stage active
           Object.keys(setupStepState).forEach((k) => {
             if (setupStepState[k].status === 'active') setupStepState[k].status = 'pending';
@@ -325,17 +393,20 @@ async function ensureOllamaAndModel() {
         } else {
           setSetupOverallProgress({ label: payload.message || 'Error', percent: computeOverallPercent() });
         }
+
+        // Only allow retry once we have actually entered an error state.
+        setSetupRetryEnabled(true);
       }
 
       // Convert raw stdout/stderr into a non-scary percent indicator (best effort).
       if (payload.kind === 'log' && typeof payload.line === 'string') {
         const line = payload.line;
-        const m = line.match(/(\d{1,3})\s*%/);
+        const m = line.match(/(\d{1,3}(?:\.\d+)?)\s*%/);
         if (m) {
           const pct = Math.max(0, Math.min(100, Number(m[1])));
-          if (setupStepState['pull-model']?.status === 'active') {
-            setStagePercent('pull-model', pct);
-          }
+          const activeKey = getActiveSetupStepKey();
+          if (activeKey) setStagePercent(activeKey, pct);
+          return;
         }
       }
     });
@@ -344,10 +415,7 @@ async function ensureOllamaAndModel() {
   const initial = await api.ollamaCheck();
 
   if (!initial.hasBinary) {
-    if (els.setupMessageEl) {
-      els.setupMessageEl.textContent =
-        'Crystal Chat uses Ollama to run the AI model locally on your computer. Installing Ollama now…';
-    }
+    setSetupMainMessageForStage('install');
     setStepStatus('install', 'active', 'Installing Ollama…');
     const installRes = await api.ollamaInstall();
     if (!installRes?.ok) {
@@ -360,6 +428,7 @@ async function ensureOllamaAndModel() {
   }
 
   if (!initial.serverReachable) {
+    setSetupMainMessageForStage('start-server');
     setStepStatus('start-server', 'active', 'Starting server…');
     const serverRes = await api.ollamaEnsureServer();
     if (!serverRes?.ok) {
@@ -382,6 +451,7 @@ async function ensureOllamaAndModel() {
   }
 
   if (!hasModel) {
+    setSetupMainMessageForStage('pull-model');
     setStepStatus('pull-model', 'active', 'Downloading model…');
     const pullRes = await api.ollamaPullModel(MODEL);
     if (!pullRes?.ok) {
@@ -391,7 +461,7 @@ async function ensureOllamaAndModel() {
 
     // Confirm model is actually available before closing the modal.
     if (api.ollamaHasModel) {
-      if (els.setupMessageEl) els.setupMessageEl.textContent = 'Finalizing model install...';
+      setSetupMainMessageForStage('finalize');
       for (let i = 0; i < 30; i++) {
         const chk = await api.ollamaHasModel(MODEL);
         if (chk?.ok) {
@@ -410,6 +480,7 @@ async function ensureOllamaAndModel() {
     setStepStatus('pull-model', 'done', 'Already installed');
   }
 
+  setSetupMainMessageForStage('finalize');
   setStepStatus('finalize', 'active', 'Finalizing…');
   setupSucceeded = true;
   if (els.setupMessageEl) els.setupMessageEl.textContent = 'Ready.';
@@ -482,18 +553,90 @@ async function continueInitAfterSetup() {
   if (savedSel && savedSel.kind === 'trash') {
     state.sidebarSelection = { kind: 'trash' };
   } else if (savedSel && savedSel.kind === 'favorites') {
-    state.sidebarSelection = { kind: 'chat', id: state.chats[0]?.id || null };
+    state.sidebarSelection = { kind: 'chat', id: null };
   } else if (savedSel && savedSel.kind === 'chat') {
     if (savedSel.id === null) {
       state.sidebarSelection = { kind: 'chat', id: null };
     } else if (typeof savedSel.id === 'string' && state.chats.some((c) => c.id === savedSel.id)) {
       state.sidebarSelection = { kind: 'chat', id: savedSel.id };
     } else {
-      state.sidebarSelection = { kind: 'chat', id: state.chats[0]?.id || null };
+      state.sidebarSelection = { kind: 'chat', id: null };
     }
   } else {
-    state.sidebarSelection = { kind: 'chat', id: state.chats[0]?.id || null };
+    state.sidebarSelection = { kind: 'chat', id: null };
   }
+  chatSidebarController = createChatSidebarController({
+    els,
+    state,
+    saveUIState,
+    setSidebarSelection,
+    renderChats,
+    renderActiveChatUI,
+    commitRename,
+    getPinnedActions: () => pinnedActions
+  });
+
+  pinnedActions = createPinnedActions({
+    db,
+    els,
+    state,
+    saveChat,
+    renderPinnedDropdown,
+    saveUIState,
+    applySidebarSelection: (sel) => chatSidebarController?.applySidebarSelection(sel),
+    renderChatsUI,
+    renderActiveChatUI
+  });
+
+  trashActions = createTrashActions({
+    db,
+    els,
+    state,
+    trashRetentionMs: TRASH_RETENTION_MS,
+    saveUIState,
+    renderChatsUI,
+    renderActiveChatUI,
+    renderTrash,
+    openConfirm,
+    dbApi: {
+      loadChats,
+      saveChat,
+      loadTrashedChats,
+      deleteChat,
+      purgeExpiredTrashedChats
+    }
+  });
+
+  streamingController = createStreamingController({
+    els,
+    state,
+    getApiUrl: () => runtimeApiUrl,
+    modelFallback: MODEL,
+    tempChatId: TEMP_CHAT_ID,
+    clampNumber,
+    streamChat,
+    updateRenderedMessage,
+    renderActiveChatUI,
+    renderChatsUI,
+    saveChat,
+    showError,
+    db
+  });
+
+  // Now that controllers exist, wire getters that may have been null during creation.
+  // (The controller reads the getter at call-time, so this works fine.)
+  chatSidebarController = createChatSidebarController({
+    els,
+    state,
+    saveUIState,
+    setSidebarSelection,
+    renderChats,
+    renderActiveChatUI,
+    commitRename,
+    getTrashActions: () => trashActions,
+    getPinnedActions: () => pinnedActions
+  });
+
   renderChatsUI();
   renderActiveChatUI();
   attachEvents();
@@ -504,44 +647,6 @@ async function continueInitAfterSetup() {
   requestAnimationFrame(() => {
     if (document.activeElement === document.body) els.promptInput?.focus();
   });
-}
-
-function startTypingSpinnerFallback() {
-  if (spinnerRafId) return;
-  const spinnerEl = els.typingIndicator?.querySelector?.('.spinner');
-  if (!spinnerEl) return;
-
-  spinnerLastTs = 0;
-  const step = (ts) => {
-    if (!els.typingIndicator || els.typingIndicator.classList.contains('hidden')) {
-      spinnerRafId = null;
-      spinnerLastTs = 0;
-      spinnerAngle = 0;
-      spinnerEl.style.transform = '';
-      return;
-    }
-    if (!spinnerLastTs) spinnerLastTs = ts;
-    const dt = ts - spinnerLastTs;
-    spinnerLastTs = ts;
-
-    // Match the original 0.8s CSS duration.
-    spinnerAngle = (spinnerAngle + (dt / 800) * 360) % 360;
-    spinnerEl.style.transform = `rotate(${spinnerAngle}deg)`;
-    spinnerRafId = window.requestAnimationFrame(step);
-  };
-
-  spinnerRafId = window.requestAnimationFrame(step);
-}
-
-function stopTypingSpinnerFallback() {
-  if (spinnerRafId) {
-    window.cancelAnimationFrame(spinnerRafId);
-    spinnerRafId = null;
-  }
-  spinnerLastTs = 0;
-  spinnerAngle = 0;
-  const spinnerEl = els.typingIndicator?.querySelector?.('.spinner');
-  if (spinnerEl) spinnerEl.style.transform = '';
 }
 
  function getActiveChat() {
@@ -608,6 +713,9 @@ init();
 async function init() {
   if (els.statusEl) els.statusEl.textContent = `Model: ${MODEL} (Ollama)`;
 
+  // Retry should only be enabled when setup fails.
+  setSetupRetryEnabled(false);
+
   try {
     const api = window.electronAPI;
     if (api?.ollamaGetApiUrl) {
@@ -632,6 +740,7 @@ async function init() {
 
   if (els.setupRetryBtn) {
     els.setupRetryBtn.addEventListener('click', async () => {
+      setSetupRetryEnabled(false);
       try {
         await ensureOllamaAndModel();
         hideError(els.errorEl);
@@ -639,8 +748,8 @@ async function init() {
         await continueInitAfterSetup();
       } catch (e) {
         showSetupModal('Setup failed.');
-        appendSetupLogLine(e?.message || 'Setup failed.');
         showError(els.errorEl, e?.message || 'Setup failed.');
+        setSetupRetryEnabled(true);
       }
     });
   }
@@ -660,15 +769,20 @@ async function init() {
     await continueInitAfterSetup();
   } catch (e) {
     showSetupModal('Setup failed.');
-    appendSetupLogLine(e?.message || 'Setup failed.');
     showError(els.errorEl, e?.message || 'Setup failed.');
+    setSetupRetryEnabled(true);
     return;
   }
+
+  updateSendButtonEnabled();
 }
 
 function attachEvents() {
   els.promptForm.addEventListener('submit', handleSubmit);
-  els.promptInput.addEventListener('input', () => autosizePrompt(els.promptInput));
+  els.promptInput.addEventListener('input', () => {
+    autosizePrompt(els.promptInput);
+    updateSendButtonEnabled();
+  });
   els.promptInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -680,7 +794,7 @@ function attachEvents() {
     if (!state.isStreaming) return;
     e.preventDefault();
     e.stopPropagation();
-    streamAbortController?.abort();
+    streamingController?.abort();
   });
 
   els.promptToolsBtn?.addEventListener('click', (e) => {
@@ -730,7 +844,7 @@ function attachEvents() {
 
   els.newChatBtn.addEventListener('click', async () => {
     state.pendingNew = true;
-    applySidebarSelection({ kind: 'chat', id: null });
+    chatSidebarController?.applySidebarSelection({ kind: 'chat', id: null });
     els.promptInput.value = '';
     autosizePrompt(els.promptInput);
     els.promptInput.focus();
@@ -739,31 +853,29 @@ function attachEvents() {
   els.trashBtn?.addEventListener('click', () => {
     const nextKind = state.sidebarSelection.kind === 'trash' ? 'chat' : 'trash';
     if (nextKind === 'trash') {
-      applySidebarSelection({ kind: 'trash' });
+      chatSidebarController?.applySidebarSelection({ kind: 'trash' });
       if (els.trashSearchInput) els.trashSearchInput.focus();
     } else {
-      applySidebarSelection({ kind: 'chat', id: state.chats[0]?.id || null });
+      chatSidebarController?.applySidebarSelection({ kind: 'chat', id: null });
       els.promptInput?.focus();
     }
   });
 
   els.pinnedBtn?.addEventListener('click', () => {
-    state.pinnedOpen = !state.pinnedOpen;
-    saveUIState(state);
-    renderChatsUI();
+    pinnedActions?.togglePinnedOpen();
   });
 
   els.trashSearchInput?.addEventListener('input', () => {
     state.trashQuery = (els.trashSearchInput.value || '').trim().toLowerCase();
-    renderTrashUI();
+    trashActions?.renderTrashUI();
   });
 
   els.trashRestoreAllBtn?.addEventListener('click', async () => {
-    await restoreAllTrashedChats();
+    await trashActions?.restoreAllTrashedChats();
   });
 
   els.trashDeleteAllBtn?.addEventListener('click', async () => {
-    await requestDeleteAllTrashed();
+    await trashActions?.requestDeleteAllTrashed();
   });
 
   els.confirmCancelBtn?.addEventListener('click', () => {
@@ -803,86 +915,11 @@ async function createChat(title) {
 }
 
 function setActiveChat(id) {
-  applySidebarSelection({ kind: 'chat', id });
-}
-
-function applySidebarSelection(next) {
-  setSidebarSelection(state, next);
-  saveUIState(state);
-  renderChatsUI();
-  renderActiveChatUI();
+  chatSidebarController?.applySidebarSelection({ kind: 'chat', id });
 }
 
 function renderChatsUI() {
-  renderChats({
-    els,
-    state,
-    onSetActiveChat: setActiveChat,
-    onStartRename: {
-      begin: (id) => {
-        state.renamingId = id;
-        renderChatsUI();
-      },
-      cancel: async () => {
-        state.renamingId = null;
-        renderChatsUI();
-      },
-      commit: async (id, title) => {
-        await commitRename(id, title);
-      }
-    },
-    onTrashChat: handleTrashChat,
-    onTogglePinned: togglePinned
-  });
-
-  renderPinnedDropdownUI();
-}
-
-async function togglePinned(id) {
-  const chat = state.chats.find((c) => c.id === id);
-  if (!chat) return;
-  if (chat.pinnedAt || chat.favoriteAt) {
-    delete chat.pinnedAt;
-    delete chat.favoriteAt;
-  } else {
-    chat.pinnedAt = Date.now();
-  }
-  await saveChat(db, chat);
-  renderChatsUI();
-  renderActiveChatUI();
-}
-
-function getPinnedChats() {
-  return (state.chats || [])
-    .filter((c) => !c.deletedAt && !!c.pinnedAt)
-    .sort((a, b) => (b.pinnedAt || 0) - (a.pinnedAt || 0));
-}
-
-function renderPinnedDropdownUI() {
-  if (els.pinnedDropdownEl) {
-    els.pinnedDropdownEl.classList.toggle('hidden', !state.pinnedOpen);
-  }
-  if (!state.pinnedOpen) return;
-
-  renderPinnedDropdown({
-    els,
-    pinnedChats: getPinnedChats(),
-    onOpenChat: (id) => {
-      applySidebarSelection({ kind: 'chat', id });
-      els.promptInput?.focus();
-    }
-  });
-}
-
-async function renderTrashUI() {
-  const trashed = await loadTrashedChats(db);
-  renderTrash({
-    els,
-    trashedChats: trashed,
-    trashQuery: state.trashQuery,
-    onRestore: restoreChat,
-    onDelete: deleteChatPermanently
-  });
+  chatSidebarController?.renderChatsUI();
 }
 
 function renderActiveChatUI() {
@@ -898,7 +935,7 @@ function renderActiveChatUI() {
   });
 
   if (state.sidebarSelection.kind === 'trash') {
-    renderTrashUI().catch(() => {
+    trashActions?.renderTrashUI().catch(() => {
       // ignore
     });
   }
@@ -915,6 +952,7 @@ async function handleSubmit(event) {
   hideError(els.errorEl);
   els.promptInput.value = '';
   autosizePrompt(els.promptInput);
+  updateSendButtonEnabled();
 
   const currentId = state.sidebarSelection.kind === 'chat' ? state.sidebarSelection.id : null;
   let chat = currentId === TEMP_CHAT_ID ? state.tempChat : state.chats.find((c) => c.id === currentId);
@@ -951,73 +989,7 @@ async function handleSubmit(event) {
 }
 
 async function handleDeleteChat(id) {
-  await handleTrashChat(id);
-}
-
-async function handleTrashChat(id) {
-  const chat = state.chats.find((c) => c.id === id);
-  if (!chat) return;
-  chat.deletedAt = Date.now();
-  await saveChat(db, chat);
-  state.chats = state.chats.filter((c) => c.id !== id);
-  if (state.renamingId === id) state.renamingId = null;
-  if (state.sidebarSelection.kind === 'chat' && state.sidebarSelection.id === id) {
-    state.sidebarSelection = { kind: 'chat', id: state.chats[0]?.id || null };
-    saveUIState(state);
-  }
-  renderChatsUI();
-  renderActiveChatUI();
-}
-
-async function restoreChat(id) {
-  const trashed = await loadTrashedChats(db);
-  const chat = trashed.find((c) => c.id === id);
-  if (!chat) return;
-  delete chat.deletedAt;
-  await saveChat(db, chat);
-  await purgeExpiredTrashedChats(db, TRASH_RETENTION_MS);
-  state.chats = await loadChats(db);
-  renderChatsUI();
-  await renderTrashUI();
-}
-
-async function deleteChatPermanently(id) {
-  await deleteChat(db, id);
-  await purgeExpiredTrashedChats(db, TRASH_RETENTION_MS);
-  await renderTrashUI();
-}
-
-async function restoreAllTrashedChats() {
-  const trashed = await loadTrashedChats(db);
-  if (trashed.length === 0) return;
-  await Promise.all(
-    trashed.map(async (chat) => {
-      delete chat.deletedAt;
-      await saveChat(db, chat);
-    })
-  );
-  state.chats = await loadChats(db);
-  renderChatsUI();
-  await renderTrashUI();
-}
-
-async function deleteAllTrashedChatsPermanently() {
-  const trashed = await loadTrashedChats(db);
-  if (trashed.length === 0) return;
-  await Promise.all(trashed.map((c) => deleteChat(db, c.id)));
-  await renderTrashUI();
-}
-
-async function requestDeleteAllTrashed() {
-  const trashed = await loadTrashedChats(db);
-  if (trashed.length === 0) return;
-  if (trashed.length === 1) {
-    await deleteAllTrashedChatsPermanently();
-    return;
-  }
-  openConfirm(els, `Delete ${trashed.length} chats permanently? This cannot be undone.`, async () => {
-    await deleteAllTrashedChatsPermanently();
-  }, (v) => (state.confirmAction = v));
+  await trashActions?.handleTrashChat(id);
 }
 
 async function commitRename(id, title) {
@@ -1035,128 +1007,5 @@ async function commitRename(id, title) {
 }
 
 async function streamAssistant(chat) {
-  state.isStreaming = true;
-  els.typingIndicator.classList.remove('hidden');
-  startTypingSpinnerFallback();
-  if (els.sendBtn) {
-    els.sendBtn.setAttribute('aria-label', 'Pause');
-    els.sendBtn.innerHTML =
-      '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
-      + '<rect x="7" y="6" width="3.5" height="12" rx="1" fill="currentColor" />'
-      + '<rect x="13.8" y="6" width="3.5" height="12" rx="1" fill="currentColor" />'
-      + '</svg>';
-  }
-  streamAbortController = new AbortController();
-  const assistantMsg = {
-    role: 'assistant',
-    content: '',
-    thinking: '',
-    _done: false,
-    _thinkingActive: false,
-    _thinkingOpen: false,
-    _thinkingUserToggled: false
-  };
-  chat.messages.push(assistantMsg);
-  renderActiveChatUI();
-  const assistantIndex = chat.messages.length - 1;
-
-  let lastStreamingFullRenderTs = 0;
-
-  const updateStreamingMessage = () => {
-    const ok = updateRenderedMessage({ els, msg: assistantMsg, messageIndex: assistantIndex });
-    if (ok) return;
-    const now = Date.now();
-    if (now - lastStreamingFullRenderTs < 250) return;
-    lastStreamingFullRenderTs = now;
-    renderActiveChatUI();
-  };
-  try {
-    const sys = (state.systemPrompt || '').toString().trim();
-    const hardSys = 'Reply in the same language as the user. Do not default to Chinese unless the user wants Chinese responses.';
-    const combinedSystem = sys ? `${hardSys}\n\n${sys}` : hardSys;
-
-    // IMPORTANT: don't send the local placeholder assistant message to Ollama.
-    // Some models/templates behave poorly if the last message is an empty assistant.
-    const historyMessages = chat.messages.slice(0, -1);
-
-    const sendMessages = [{ role: 'system', content: combinedSystem }, ...historyMessages];
-
-    const isTransientOllamaLoadError = (message) => {
-      const m = (message || '').toString();
-      return /do load request/i.test(m) && /\bEOF\b/i.test(m);
-    };
-
-    const runStream = async () => {
-      await streamChat({
-        apiUrl: runtimeApiUrl || 'http://localhost:11434/api/chat',
-        model: (state.selectedModel || MODEL).toString(),
-        temperature: clampNumber(state.creativity, 0, 2, 1),
-        messages: sendMessages,
-        signal: streamAbortController.signal,
-        onThinking: (token) => {
-          if (!assistantMsg._thinkingActive) {
-            assistantMsg._thinkingActive = true;
-            assistantMsg._thinkingOpen = true;
-            assistantMsg._thinkingUserToggled = false;
-          }
-          assistantMsg.thinking += token;
-          updateStreamingMessage();
-        },
-        onToken: (token) => {
-          if (assistantMsg._thinkingActive) {
-            assistantMsg._thinkingActive = false;
-            if (!assistantMsg._thinkingUserToggled) {
-              assistantMsg._thinkingOpen = false;
-            }
-          }
-          assistantMsg.content += token;
-          updateStreamingMessage();
-        }
-      });
-    };
-
-    try {
-      await runStream();
-    } catch (e) {
-      if (isTransientOllamaLoadError(e?.message) && !streamAbortController?.signal?.aborted) {
-        const api = window.electronAPI;
-        try {
-          await api?.ollamaEnsureServer?.();
-        } catch {
-          // ignore
-        }
-        await new Promise((r) => setTimeout(r, 400));
-        await runStream();
-      } else {
-        throw e;
-      }
-    }
-
-    assistantMsg._done = true;
-    renderActiveChatUI();
-    if (chat.id !== TEMP_CHAT_ID) {
-      await saveChat(db, chat);
-      renderChatsUI();
-    }
-  } catch (err) {
-    if (err?.name === 'AbortError') {
-      // user paused
-    } else {
-      showError(els.errorEl, err.message || 'Failed to reach Ollama.');
-      chat.messages.pop(); // remove assistant placeholder
-      if (chat.id !== TEMP_CHAT_ID) {
-        await saveChat(db, chat);
-      }
-      renderActiveChatUI();
-    }
-  } finally {
-    state.isStreaming = false;
-    els.typingIndicator.classList.add('hidden');
-    stopTypingSpinnerFallback();
-    streamAbortController = null;
-    if (els.sendBtn) {
-      els.sendBtn.setAttribute('aria-label', 'Send');
-      els.sendBtn.innerHTML = '<span>➤</span>';
-    }
-  }
+  await streamingController?.streamAssistant(chat);
 }

@@ -89,6 +89,18 @@ export function renderChats({ els, state, onSetActiveChat, onStartRename, onTras
     ? state.chats.filter((chat) => chatTitleFromMessages(chat).toLowerCase().includes(query))
     : state.chats;
 
+  if (!chats.length) {
+    const empty = document.createElement('div');
+    empty.className = 'chat-list-empty';
+    if (query) {
+      empty.textContent = `No chats found matching "${(state.chatQuery || '').toString().trim()}"`;
+    } else {
+      empty.textContent = state.chats.length ? 'No chats found.' : 'No chats yet.';
+    }
+    els.chatListEl.appendChild(empty);
+    return;
+  }
+
   chats.forEach((chat) => {
     const item = document.createElement('div');
     item.className = `chat-item ${state.sidebarSelection.kind === 'chat' && chat.id === state.sidebarSelection.id ? 'active' : ''}`;

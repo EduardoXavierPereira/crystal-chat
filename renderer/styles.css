@@ -439,6 +439,15 @@ body {
   white-space: nowrap;
 }
 
+.chat-list-empty {
+  color: var(--muted);
+  text-align: center;
+  padding: 14px 10px;
+  border: 1px dashed rgba(255, 255, 255, 0.10);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.02);
+}
+
  .chat-search-hit {
   background: rgba(127, 201, 255, 0.22);
   color: inherit;
@@ -1471,6 +1480,15 @@ body {
 
 .send-button:active {
   background: #6fbcef;
+}
+
+.send-button:disabled,
+.send-button[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(245, 246, 250, 0.55);
 }
 
 .prompt-actions {
