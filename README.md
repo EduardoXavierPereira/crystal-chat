@@ -16,7 +16,7 @@ Crystal Chat is a privacy-focused, open-source local AI chat client powered by O
 
 Crystal Chat is an Electron app. The renderer calls the local Ollama Chat API:
 
-- `http://localhost:11434/api/chat`
+- `http://localhost:11435/api/chat`
 
 By default it uses the model configured in `renderer/state.js` (currently `qwen3:4b`).
 
