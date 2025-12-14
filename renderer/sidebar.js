@@ -22,7 +22,12 @@ export function getEls() {
     confirmModalEl: document.getElementById('confirm-modal'),
     confirmMessageEl: document.getElementById('confirm-message'),
     confirmCancelBtn: document.getElementById('confirm-cancel'),
-    confirmOkBtn: document.getElementById('confirm-ok')
+    confirmOkBtn: document.getElementById('confirm-ok'),
+    setupModalEl: document.getElementById('setup-modal'),
+    setupMessageEl: document.getElementById('setup-message'),
+    setupLogEl: document.getElementById('setup-log'),
+    setupRetryBtn: document.getElementById('setup-retry'),
+    setupCloseBtn: document.getElementById('setup-close')
   };
 }
 

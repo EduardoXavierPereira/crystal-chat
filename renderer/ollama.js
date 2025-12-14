@@ -6,13 +6,29 @@ export async function streamChat({ apiUrl, model, messages, onToken, onThinking,
     body: JSON.stringify({
       model,
       messages: messages.map(({ role, content }) => ({ role, content })),
-      think: true,
       stream: true
     })
   });
 
   if (!res.ok || !res.body) {
-    throw new Error(`Ollama error: ${res.status} ${res.statusText}`);
+    let details = '';
+    try {
+      const txt = await res.text();
+      if (txt) {
+        try {
+          const j = JSON.parse(txt);
+          details = j?.error ? String(j.error) : txt;
+        } catch {
+          details = txt;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    const msg = details
+      ? `Ollama error: ${res.status} ${res.statusText} - ${details}`
+      : `Ollama error: ${res.status} ${res.statusText}`;
+    throw new Error(msg);
   }
 
   const reader = res.body.getReader();

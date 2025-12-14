@@ -79,6 +79,17 @@
             </div>
           </div>
         </div>
+        <div id="setup-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="setup-title">
+          <div class="modal">
+            <div id="setup-title" class="modal-title">Setting up Ollama</div>
+            <div id="setup-message" class="modal-message"></div>
+            <div id="setup-log" class="setup-log" aria-label="Setup logs" role="log"></div>
+            <div class="modal-actions">
+              <button id="setup-retry" class="button button-ghost">Retry</button>
+              <button id="setup-close" class="button button-ghost">Close</button>
+            </div>
+          </div>
+        </div>
         <section id="messages" class="messages">
           <div id="typing-indicator" class="typing chat-typing hidden">
             <div class="spinner"></div>

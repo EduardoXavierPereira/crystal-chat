@@ -1054,6 +1054,19 @@ body {
   line-height: 1.4;
 }
 
+ .setup-log {
+  height: 200px;
+  overflow: auto;
+  padding: 10px;
+  border-radius: var(--radius-ml);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--muted);
+  font-family: var(--mono, "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace);
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+ }
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;

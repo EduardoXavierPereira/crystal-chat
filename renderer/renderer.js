@@ -1,5 +1,4 @@
 import {
-  API_URL,
   MODEL,
   TEMP_CHAT_ID,
   TRASH_RETENTION_MS,
@@ -25,6 +24,8 @@ import { renderActiveChat } from './messages.js';
 const els = getEls();
 const state = createInitialState();
 
+let runtimeApiUrl = null;
+
 let streamAbortController = null;
 
 let spinnerRafId = null;
@@ -32,6 +33,179 @@ let spinnerLastTs = 0;
 let spinnerAngle = 0;
 
 let db;
+
+let setupUnsub = null;
+let initCompleted = false;
+let setupSucceeded = false;
+
+function showSetupModal(message) {
+  if (!els.setupModalEl) return;
+  els.setupModalEl.classList.remove('hidden');
+  if (els.setupMessageEl) els.setupMessageEl.textContent = (message || '').toString();
+  if (els.setupCloseBtn) {
+    els.setupCloseBtn.disabled = !setupSucceeded;
+  }
+}
+
+function hideSetupModal() {
+  if (!els.setupModalEl) return;
+  els.setupModalEl.classList.add('hidden');
+}
+
+function appendSetupLogLine(line) {
+  if (!els.setupLogEl) return;
+  const next = `${(line || '').toString()}\n`;
+  els.setupLogEl.textContent += next;
+}
+
+async function ensureOllamaAndModel() {
+  const api = window.electronAPI;
+  if (!api?.ollamaCheck) return;
+
+  showSetupModal(`Checking Ollama + ${MODEL}...`);
+  if (els.setupLogEl) els.setupLogEl.textContent = '';
+  appendSetupLogLine(`Checking dependencies for ${MODEL}...`);
+  setupSucceeded = false;
+  if (els.setupCloseBtn) els.setupCloseBtn.disabled = true;
+
+  if (!setupUnsub && api.onOllamaSetupProgress) {
+    setupUnsub = api.onOllamaSetupProgress((payload) => {
+      if (!payload) return;
+      if (payload.kind === 'stage' && payload.message) {
+        if (els.setupMessageEl) els.setupMessageEl.textContent = payload.message;
+      }
+      if (payload.kind === 'log' && payload.line) {
+        appendSetupLogLine(payload.line);
+      }
+      if ((payload.kind === 'error' || payload.kind === 'done') && payload.message) {
+        appendSetupLogLine(payload.message);
+      }
+    });
+  }
+
+  const initial = await api.ollamaCheck();
+
+  if (!initial.hasBinary) {
+    if (els.setupMessageEl) els.setupMessageEl.textContent = 'Ollama is not installed. Installing now...';
+    appendSetupLogLine('Installing Ollama...');
+    const installRes = await api.ollamaInstall();
+    if (!installRes?.ok) {
+      if (els.setupMessageEl) els.setupMessageEl.textContent = 'Failed to install Ollama. Click Retry.';
+      throw new Error('Ollama install failed.');
+    }
+    appendSetupLogLine('Ollama installed.');
+  }
+
+  if (!initial.serverReachable) {
+    appendSetupLogLine('Starting Ollama server...');
+    const serverRes = await api.ollamaEnsureServer();
+    if (!serverRes?.ok) {
+      if (els.setupMessageEl) els.setupMessageEl.textContent = 'Could not start Ollama server. Click Retry.';
+      throw new Error('Ollama server not reachable.');
+    }
+    appendSetupLogLine('Ollama server reachable.');
+  }
+
+  // Use a reliable model check (via /api/show in the main process) instead of tags.
+  let hasModel = false;
+  if (api.ollamaHasModel) {
+    const r = await api.ollamaHasModel(MODEL);
+    hasModel = !!r?.ok;
+  } else {
+    const afterServer = await api.ollamaCheck();
+    hasModel = Array.isArray(afterServer.models) && afterServer.models.includes(MODEL);
+  }
+
+  if (!hasModel) {
+    appendSetupLogLine(`Model missing: ${MODEL}`);
+    const pullRes = await api.ollamaPullModel(MODEL);
+    if (!pullRes?.ok) {
+      if (els.setupMessageEl) els.setupMessageEl.textContent = 'Failed to download model. Click Retry.';
+      throw new Error('Model download failed.');
+    }
+
+    // Confirm model is actually available before closing the modal.
+    if (api.ollamaHasModel) {
+      if (els.setupMessageEl) els.setupMessageEl.textContent = 'Finalizing model install...';
+      for (let i = 0; i < 30; i++) {
+        const chk = await api.ollamaHasModel(MODEL);
+        if (chk?.ok) {
+          hasModel = true;
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    }
+
+    if (!hasModel) {
+      throw new Error(`Model still not available after download: ${MODEL}`);
+    }
+    appendSetupLogLine('Model installed.');
+  } else {
+    appendSetupLogLine('Model already installed.');
+  }
+
+  setupSucceeded = true;
+  if (els.setupMessageEl) els.setupMessageEl.textContent = 'Ready. Click Close to continue.';
+  appendSetupLogLine('Ready. Click Close to continue.');
+  if (els.setupCloseBtn) els.setupCloseBtn.disabled = false;
+}
+
+async function continueInitAfterSetup() {
+  if (initCompleted) return;
+  initCompleted = true;
+
+  db = await openDB();
+  await purgeExpiredTrashedChats(db, TRASH_RETENTION_MS);
+  setInterval(() => {
+    purgeExpiredTrashedChats(db, TRASH_RETENTION_MS).catch(() => {
+      // ignore
+    });
+  }, 6 * 60 * 60 * 1000);
+  state.chats = await loadChats(db);
+  const ui = loadUIState();
+  const savedSel = ui?.sidebarSelection;
+  state.pinnedOpen = !!(ui?.pinnedOpen ?? ui?.favoritesOpen);
+  state.chatQuery = (ui?.chatQuery || '').toString();
+
+  const migrated = [];
+  state.chats.forEach((chat) => {
+    if (chat.favoriteAt && !chat.pinnedAt) {
+      chat.pinnedAt = chat.favoriteAt;
+      delete chat.favoriteAt;
+      migrated.push(chat);
+    }
+  });
+
+  if (migrated.length > 0) {
+    await Promise.all(migrated.map((c) => saveChat(db, c)));
+  }
+  if (savedSel && savedSel.kind === 'trash') {
+    state.sidebarSelection = { kind: 'trash' };
+  } else if (savedSel && savedSel.kind === 'favorites') {
+    state.sidebarSelection = { kind: 'chat', id: state.chats[0]?.id || null };
+  } else if (savedSel && savedSel.kind === 'chat') {
+    if (savedSel.id === null) {
+      state.sidebarSelection = { kind: 'chat', id: null };
+    } else if (typeof savedSel.id === 'string' && state.chats.some((c) => c.id === savedSel.id)) {
+      state.sidebarSelection = { kind: 'chat', id: savedSel.id };
+    } else {
+      state.sidebarSelection = { kind: 'chat', id: state.chats[0]?.id || null };
+    }
+  } else {
+    state.sidebarSelection = { kind: 'chat', id: state.chats[0]?.id || null };
+  }
+  renderChatsUI();
+  renderActiveChatUI();
+  attachEvents();
+  if (els.chatSearchInput) {
+    els.chatSearchInput.value = state.chatQuery;
+  }
+  autosizePrompt(els.promptInput);
+  requestAnimationFrame(() => {
+    if (document.activeElement === document.body) els.promptInput?.focus();
+  });
+}
 
 function startTypingSpinnerFallback() {
   if (spinnerRafId) return;
@@ -134,6 +308,41 @@ init();
 
 async function init() {
   if (els.statusEl) els.statusEl.textContent = `Model: ${MODEL} (Ollama)`;
+
+  try {
+    const api = window.electronAPI;
+    if (api?.ollamaGetApiUrl) {
+      const r = await api.ollamaGetApiUrl();
+      runtimeApiUrl = r?.apiUrl || null;
+      if (runtimeApiUrl && els.statusEl) {
+        els.statusEl.textContent = `Model: ${MODEL} (Ollama @ ${r?.host || 'local'})`;
+      }
+    }
+  } catch {
+    runtimeApiUrl = null;
+  }
+
+  if (els.setupCloseBtn) {
+    els.setupCloseBtn.addEventListener('click', async () => {
+      if (!setupSucceeded) return;
+      hideSetupModal();
+      hideError(els.errorEl);
+      await continueInitAfterSetup();
+    });
+  }
+
+  if (els.setupRetryBtn) {
+    els.setupRetryBtn.addEventListener('click', async () => {
+      try {
+        await ensureOllamaAndModel();
+        hideError(els.errorEl);
+      } catch (e) {
+        showSetupModal('Setup failed.');
+        appendSetupLogLine(e?.message || 'Setup failed.');
+        showError(els.errorEl, e?.message || 'Setup failed.');
+      }
+    });
+  }
   try {
     const style = document.createElement('style');
     document.head.appendChild(style);
@@ -143,56 +352,18 @@ async function init() {
   } catch (e) {
     console.warn('[scrollbar] ::-webkit-scrollbar NOT supported/ignored by this build', e);
   }
-  db = await openDB();
-  await purgeExpiredTrashedChats(db, TRASH_RETENTION_MS);
-  setInterval(() => {
-    purgeExpiredTrashedChats(db, TRASH_RETENTION_MS).catch(() => {
-      // ignore
-    });
-  }, 6 * 60 * 60 * 1000);
-  state.chats = await loadChats(db);
-  const ui = loadUIState();
-  const savedSel = ui?.sidebarSelection;
-  state.pinnedOpen = !!(ui?.pinnedOpen ?? ui?.favoritesOpen);
-  state.chatQuery = (ui?.chatQuery || '').toString();
 
-  const migrated = [];
-  state.chats.forEach((chat) => {
-    if (chat.favoriteAt && !chat.pinnedAt) {
-      chat.pinnedAt = chat.favoriteAt;
-      delete chat.favoriteAt;
-      migrated.push(chat);
-    }
-  });
+  try {
+    await ensureOllamaAndModel();
+  } catch (e) {
+    showSetupModal('Setup failed.');
+    appendSetupLogLine(e?.message || 'Setup failed.');
+    showError(els.errorEl, e?.message || 'Setup failed.');
+    return;
+  }
 
-  if (migrated.length > 0) {
-    await Promise.all(migrated.map((c) => saveChat(db, c)));
-  }
-  if (savedSel && savedSel.kind === 'trash') {
-    state.sidebarSelection = { kind: 'trash' };
-  } else if (savedSel && savedSel.kind === 'favorites') {
-    state.sidebarSelection = { kind: 'chat', id: state.chats[0]?.id || null };
-  } else if (savedSel && savedSel.kind === 'chat') {
-    if (savedSel.id === null) {
-      state.sidebarSelection = { kind: 'chat', id: null };
-    } else if (typeof savedSel.id === 'string' && state.chats.some((c) => c.id === savedSel.id)) {
-      state.sidebarSelection = { kind: 'chat', id: savedSel.id };
-    } else {
-      state.sidebarSelection = { kind: 'chat', id: state.chats[0]?.id || null };
-    }
-  } else {
-    state.sidebarSelection = { kind: 'chat', id: state.chats[0]?.id || null };
-  }
-  renderChatsUI();
-  renderActiveChatUI();
-  attachEvents();
-  if (els.chatSearchInput) {
-    els.chatSearchInput.value = state.chatQuery;
-  }
-  autosizePrompt(els.promptInput);
-  requestAnimationFrame(() => {
-    if (document.activeElement === document.body) els.promptInput?.focus();
-  });
+  // Setup succeeded; user must close the modal to continue.
+  showSetupModal('Ready. Click Close to continue.');
 }
 
 function attachEvents() {
@@ -550,7 +721,7 @@ async function streamAssistant(chat) {
   renderActiveChatUI();
   try {
     await streamChat({
-      apiUrl: API_URL,
+      apiUrl: runtimeApiUrl || 'http://localhost:11434/api/chat',
       model: MODEL,
       messages: chat.messages,
       signal: streamAbortController.signal,
