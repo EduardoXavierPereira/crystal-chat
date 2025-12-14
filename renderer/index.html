@@ -108,6 +108,39 @@
         <div id="error" class="error hidden"></div>
         <form id="prompt-form" class="prompt-form">
           <div class="input-shell">
+            <div class="prompt-tools">
+              <button id="prompt-tools-btn" type="button" class="prompt-tools-btn" aria-label="Chat settings" aria-haspopup="dialog" aria-expanded="false">
+                <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                  <path d="M12 5.5C12 6.88071 10.8807 8 9.5 8C8.11929 8 7 6.88071 7 5.5M12 5.5C12 4.11929 10.8807 3 9.5 3C8.11929 3 7 4.11929 7 5.5M12 5.5H21M7 5.5H3M19 12C19 13.3807 17.8807 14.5 16.5 14.5C15.1193 14.5 14 13.3807 14 12M19 12C19 10.6193 17.8807 9.5 16.5 9.5C15.1193 9.5 14 10.6193 14 12M19 12H21M14 12H3M10 18.5C10 19.8807 8.88071 21 7.5 21C6.11929 21 5 19.8807 5 18.5M10 18.5C10 17.1193 8.88071 16 7.5 16C6.11929 16 5 17.1193 5 18.5M10 18.5H21M5 18.5H3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+              <div id="prompt-tools-popover" class="prompt-tools-popover hidden" role="dialog" aria-label="Chat settings">
+                <div class="prompt-tools-row">
+                  <label class="prompt-tools-label" for="model-select">Model</label>
+                  <div id="model-dropdown" class="prompt-tools-dropdown" aria-label="Model"></div>
+                </div>
+                <div class="prompt-tools-row">
+                  <label class="prompt-tools-label" for="creativity-slider">Creativity</label>
+                  <div class="prompt-tools-slider-wrap">
+                    <input id="creativity-slider" class="prompt-tools-slider" type="range" min="0" max="2" step="0.05" />
+                    <div id="creativity-value" class="prompt-tools-value">1.00</div>
+                  </div>
+                </div>
+                <div class="prompt-tools-row">
+                  <label class="prompt-tools-label" for="system-prompt">System prompt</label>
+                  <textarea id="system-prompt" class="prompt-tools-textarea" rows="2" placeholder="Optional instructions for the assistant..."></textarea>
+                </div>
+                <div id="model-install" class="prompt-tools-install hidden" aria-live="polite">
+                  <div class="prompt-tools-install-top">
+                    <div id="model-install-label" class="prompt-tools-install-label">Downloading…</div>
+                    <div id="model-install-percent" class="prompt-tools-install-percent">0%</div>
+                  </div>
+                  <div class="prompt-tools-install-bar">
+                    <div id="model-install-bar-fill" class="prompt-tools-install-bar-fill"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
             <textarea
               id="prompt-input"
               class="prompt-input"

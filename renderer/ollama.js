@@ -1,10 +1,11 @@
-export async function streamChat({ apiUrl, model, messages, onToken, onThinking, signal }) {
+export async function streamChat({ apiUrl, model, temperature, messages, onToken, onThinking, signal }) {
   const res = await fetch(apiUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     signal,
     body: JSON.stringify({
       model,
+      options: Number.isFinite(temperature) ? { temperature } : undefined,
       messages: messages.map(({ role, content }) => ({ role, content })),
       stream: true
     })

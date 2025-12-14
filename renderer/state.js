@@ -17,6 +17,9 @@ export function createInitialState() {
     temporaryChatEnabled: false,
     tempChat: null,
     pinnedOpen: false,
+    selectedModel: MODEL,
+    creativity: 1,
+    systemPrompt: '',
     sidebarSelection: { kind: 'chat', id: null }
   };
 }
@@ -26,6 +29,10 @@ export function saveUIState(state) {
     const toSave = {
       chatQuery: (state.chatQuery || '').toString(),
       pinnedOpen: !!state.pinnedOpen,
+      selectedModel: (state.selectedModel || MODEL).toString(),
+      creativity: Number.isFinite(state.creativity) ? state.creativity : 1,
+      randomness: Number.isFinite(state.creativity) ? state.creativity : 1,
+      systemPrompt: (state.systemPrompt || '').toString(),
       sidebarSelection:
         state.sidebarSelection.kind === 'chat' && state.sidebarSelection.id === TEMP_CHAT_ID
           ? { kind: 'chat', id: null }

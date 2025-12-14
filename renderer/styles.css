@@ -902,13 +902,302 @@ body {
   padding: 8px;
 }
 
+.prompt-tools {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 4px 2px 4px 2px;
+}
+
+.prompt-tools-btn {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.prompt-tools-btn:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(127, 201, 255, 0.35);
+}
+
+.prompt-tools-btn:active {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.prompt-tools-popover {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 10px);
+  width: 420px;
+  max-width: min(420px, calc(100vw - 36px));
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
+  z-index: 20;
+}
+
+.prompt-tools-row {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 10px;
+  align-items: center;
+}
+
+.prompt-tools-label {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.prompt-tools-dropdown {
+  width: 100%;
+}
+
+.cc-dropdown {
+  position: relative;
+  width: 100%;
+}
+
+.cc-dropdown-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 9px 10px;
+  font-size: 0.95rem;
+  font-family: var(--sans);
+  cursor: pointer;
+}
+
+.cc-dropdown-btn:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(127, 201, 255, 0.35);
+}
+
+.cc-dropdown-btn:focus {
+  outline: 1px solid rgba(77, 163, 255, 0.4);
+}
+
+.cc-dropdown-btn-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cc-dropdown-chevron {
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
+.cc-dropdown.disabled .cc-dropdown-btn {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.cc-dropdown-menu {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 8px);
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
+  z-index: 40;
+  max-height: 260px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.cc-dropdown-item {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  font-size: 0.95rem;
+  font-family: var(--sans);
+  cursor: pointer;
+}
+
+.cc-dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(127, 201, 255, 0.25);
+}
+
+.cc-dropdown-item.active {
+  border-color: rgba(127, 201, 255, 0.45);
+  background: rgba(127, 201, 255, 0.08);
+}
+
+.prompt-tools-slider-wrap {
+  display: grid;
+  grid-template-columns: 1fr 52px;
+  gap: 10px;
+  align-items: center;
+}
+
+.prompt-tools-slider {
+  width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  background: linear-gradient(
+    90deg,
+    rgba(127, 201, 255, 0.75) 0%,
+    rgba(127, 201, 255, 0.75) var(--range-pct, 50%),
+    rgba(255, 255, 255, 0.06) var(--range-pct, 50%),
+    rgba(255, 255, 255, 0.06) 100%
+  );
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  height: 10px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.prompt-tools-slider:focus {
+  outline: none;
+}
+
+.prompt-tools-slider::-webkit-slider-runnable-track {
+  height: 10px;
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+}
+
+.prompt-tools-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: -6px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
+}
+
+.prompt-tools-slider:focus::-webkit-slider-thumb {
+  box-shadow:
+    0 0 0 4px rgba(127, 201, 255, 0.22),
+    0 6px 14px rgba(0, 0, 0, 0.35);
+}
+
+.prompt-tools-slider::-moz-range-track {
+  height: 10px;
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+}
+
+.prompt-tools-slider::-moz-range-progress {
+  height: 10px;
+  background: rgba(127, 201, 255, 0.75);
+  border-radius: 999px;
+}
+
+.prompt-tools-slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
+}
+
+.prompt-tools-slider::-moz-focus-outer {
+  border: 0;
+}
+
+.prompt-tools-value {
+  text-align: right;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9rem;
+}
+
+.prompt-tools-textarea {
+  width: 100%;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 9px 10px;
+  font-size: 0.95rem;
+  font-family: var(--sans);
+  line-height: 1.35;
+  resize: none;
+  min-height: 44px;
+  max-height: 160px;
+}
+
+.prompt-tools-textarea::-webkit-resizer {
+  display: none;
+}
+
+.prompt-tools-textarea:focus {
+  outline: 1px solid rgba(77, 163, 255, 0.4);
+}
+
+.prompt-tools-install {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.prompt-tools-install-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.prompt-tools-install-bar {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.prompt-tools-install-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: rgba(77, 163, 255, 0.7);
+}
+
 .prompt-input {
   width: 100%;
   background: transparent;
   color: var(--text);
   border: none;
   border-radius: 0;
-  padding: 8px 46px 8px 6px;
+  padding: 8px 46px 8px 10px;
   font-size: 1rem;
   font-family: var(--sans);
   line-height: 1.4;

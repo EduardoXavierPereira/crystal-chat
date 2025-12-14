@@ -20,6 +20,8 @@ import { autosizePrompt, showError, hideError, openConfirm, closeConfirm } from 
 import { renderTrash } from './trash.js';
 import { renderPinnedDropdown } from './pinned.js';
 import { renderActiveChat } from './messages.js';
+import { createCustomDropdown } from './customDropdown.js';
+import { formatModelName } from './formatModelName.js';
 
 const els = getEls();
 const state = createInitialState();
@@ -38,12 +40,137 @@ let setupUnsub = null;
 let initCompleted = false;
 let setupSucceeded = false;
 
+let modelInstallUnsub = null;
+let modelInstallActive = false;
+let modelInstallPercent = 0;
+let modelInstallTarget = null;
+
+let modelDropdown = null;
+
+const MODEL_OPTIONS = ['qwen3:0.6b', 'qwen3:1.7b', 'qwen3:4b', 'qwen3:8b'].map((m) => ({
+  value: m,
+  label: formatModelName(m)
+}));
+
 const SETUP_STEPS = [
   { key: 'install', title: 'Install Ollama', weight: 20 },
   { key: 'start-server', title: 'Start server', weight: 10 },
   { key: 'pull-model', title: `Download model (${MODEL})`, weight: 60 },
   { key: 'finalize', title: 'Finalize', weight: 10 }
 ];
+
+function clampNumber(v, min, max, fallback) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
+}
+
+function setModelInstallUI({ visible, label, percent }) {
+  if (els.modelInstallEl) els.modelInstallEl.classList.toggle('hidden', !visible);
+  if (els.modelInstallLabelEl) els.modelInstallLabelEl.textContent = (label || '').toString();
+  const p = Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0;
+  if (els.modelInstallPercentEl) els.modelInstallPercentEl.textContent = `${Math.round(p)}%`;
+  if (els.modelInstallBarFillEl) els.modelInstallBarFillEl.style.width = `${p}%`;
+}
+
+function closePromptToolsPopover() {
+  if (!els.promptToolsPopover || !els.promptToolsBtn) return;
+  els.promptToolsPopover.classList.add('hidden');
+  els.promptToolsBtn.setAttribute('aria-expanded', 'false');
+}
+
+function togglePromptToolsPopover() {
+  if (!els.promptToolsPopover || !els.promptToolsBtn) return;
+  const isOpen = !els.promptToolsPopover.classList.contains('hidden');
+  els.promptToolsPopover.classList.toggle('hidden', isOpen);
+  els.promptToolsBtn.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+}
+
+function updateStatusText() {
+  if (!els.statusEl) return;
+  const m = (state.selectedModel || MODEL).toString();
+  const label = formatModelName(m) || m;
+  const host = runtimeApiUrl ? ` @ ${new URL(runtimeApiUrl).host}` : '';
+  els.statusEl.textContent = `Model: ${label} (Ollama${host})`;
+}
+
+function updatePromptPlaceholder() {
+  if (!els.promptInput) return;
+  const m = (state.selectedModel || MODEL).toString();
+  const label = formatModelName(m) || m;
+  els.promptInput.placeholder = `Message ${label}`;
+}
+
+function setRandomnessSliderFill() {
+  if (!els.creativitySlider) return;
+  const min = clampNumber(els.creativitySlider.min, 0, 2, 0);
+  const max = clampNumber(els.creativitySlider.max, 0, 2, 2);
+  const v = clampNumber(els.creativitySlider.value, min, max, 1);
+  const pct = max > min ? ((v - min) / (max - min)) * 100 : 0;
+  els.creativitySlider.style.setProperty('--range-pct', `${pct}%`);
+}
+
+async function ensureModelInstalled(model) {
+  const api = window.electronAPI;
+  if (!api?.ollamaCheck) return;
+
+  const target = (model || '').toString().trim();
+  if (!target) return;
+
+  modelInstallActive = true;
+  modelInstallTarget = target;
+  modelInstallPercent = 0;
+  setModelInstallUI({ visible: true, label: `Checking ${target}…`, percent: 0 });
+  modelDropdown?.setDisabled(true);
+
+  if (!modelInstallUnsub && api.onOllamaSetupProgress) {
+    modelInstallUnsub = api.onOllamaSetupProgress((payload) => {
+      if (!payload || !modelInstallActive) return;
+      if (payload.kind === 'stage' && payload.stage === 'pull-model') {
+        const msg = payload.message || `Downloading ${modelInstallTarget || ''}…`;
+        setModelInstallUI({ visible: true, label: msg, percent: modelInstallPercent });
+      }
+      if (payload.kind === 'log' && typeof payload.line === 'string') {
+        const m = payload.line.match(/(\d{1,3})\s*%/);
+        if (m) {
+          modelInstallPercent = Math.max(0, Math.min(100, Number(m[1])));
+          setModelInstallUI({ visible: true, label: `Downloading ${modelInstallTarget || ''}…`, percent: modelInstallPercent });
+        }
+      }
+    });
+  }
+
+  try {
+    const initial = await api.ollamaCheck();
+    if (!initial?.hasBinary) {
+      setModelInstallUI({ visible: true, label: 'Installing Ollama…', percent: 0 });
+      const installRes = await api.ollamaInstall();
+      if (!installRes?.ok) throw new Error('Ollama install failed.');
+    }
+
+    if (!initial?.serverReachable) {
+      setModelInstallUI({ visible: true, label: 'Starting server…', percent: 0 });
+      const serverRes = await api.ollamaEnsureServer();
+      if (!serverRes?.ok) throw new Error('Ollama server not reachable.');
+    }
+
+    const has = await api.ollamaHasModel(target);
+    if (!has?.ok) {
+      modelInstallPercent = 0;
+      setModelInstallUI({ visible: true, label: `Downloading ${target}…`, percent: 0 });
+      const pull = await api.ollamaPullModel(target);
+      if (!pull?.ok) throw new Error('Model download failed.');
+      setModelInstallUI({ visible: true, label: `${target} ready.`, percent: 100 });
+      await new Promise((r) => setTimeout(r, 400));
+    } else {
+      setModelInstallUI({ visible: false, label: '', percent: 0 });
+    }
+  } finally {
+    modelInstallActive = false;
+    modelInstallTarget = null;
+    modelDropdown?.setDisabled(false);
+  }
+}
 
 const setupStepState = Object.fromEntries(
   SETUP_STEPS.map((s) => [s.key, { status: 'pending', detail: '' }])
@@ -306,6 +433,39 @@ async function continueInitAfterSetup() {
   const savedSel = ui?.sidebarSelection;
   state.pinnedOpen = !!(ui?.pinnedOpen ?? ui?.favoritesOpen);
   state.chatQuery = (ui?.chatQuery || '').toString();
+  state.selectedModel = (ui?.selectedModel || state.selectedModel || MODEL).toString();
+  state.creativity = clampNumber(ui?.creativity ?? ui?.randomness, 0, 2, state.creativity);
+  state.systemPrompt = (ui?.systemPrompt ?? state.systemPrompt ?? '').toString();
+
+  if (els.modelDropdownEl) {
+    modelDropdown?.destroy?.();
+    modelDropdown = createCustomDropdown({
+      rootEl: els.modelDropdownEl,
+      options: MODEL_OPTIONS,
+      value: state.selectedModel,
+      ariaLabel: 'Model',
+      onChange: async (next) => {
+        state.selectedModel = (next || MODEL).toString();
+        saveUIState(state);
+        updateStatusText();
+        updatePromptPlaceholder();
+        try {
+          await ensureModelInstalled(state.selectedModel);
+        } catch (e) {
+          showError(els.errorEl, e?.message || 'Failed to install model.');
+        } finally {
+          setModelInstallUI({ visible: false, label: '', percent: 0 });
+        }
+      }
+    });
+  }
+
+  if (els.creativitySlider) els.creativitySlider.value = String(state.creativity);
+  if (els.creativityValue) els.creativityValue.textContent = state.creativity.toFixed(2);
+  if (els.systemPromptInput) els.systemPromptInput.value = state.systemPrompt;
+  setRandomnessSliderFill();
+  updateStatusText();
+  updatePromptPlaceholder();
 
   const migrated = [];
   state.chats.forEach((chat) => {
@@ -522,6 +682,45 @@ function attachEvents() {
     e.stopPropagation();
     streamAbortController?.abort();
   });
+
+  els.promptToolsBtn?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    togglePromptToolsPopover();
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!els.promptToolsPopover || els.promptToolsPopover.classList.contains('hidden')) return;
+    const t = e.target;
+    if (!(t instanceof Node)) return;
+    if (els.promptToolsPopover.contains(t)) return;
+    if (els.promptToolsBtn && els.promptToolsBtn.contains(t)) return;
+    closePromptToolsPopover();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closePromptToolsPopover();
+    }
+  });
+
+  if (els.creativitySlider) {
+    els.creativitySlider.addEventListener('input', () => {
+      state.creativity = clampNumber(els.creativitySlider.value, 0, 2, 1);
+      if (els.creativityValue) els.creativityValue.textContent = state.creativity.toFixed(2);
+      setRandomnessSliderFill();
+      saveUIState(state);
+    });
+  }
+
+  if (els.systemPromptInput) {
+    els.systemPromptInput.addEventListener('input', () => {
+      state.systemPrompt = (els.systemPromptInput.value || '').toString();
+      saveUIState(state);
+    });
+  }
+
+  // model dropdown is handled by createCustomDropdown callback
 
   els.chatSearchInput?.addEventListener('input', () => {
     state.chatQuery = (els.chatSearchInput.value || '').trim().toLowerCase();
@@ -860,10 +1059,13 @@ async function streamAssistant(chat) {
   chat.messages.push(assistantMsg);
   renderActiveChatUI();
   try {
+    const sys = (state.systemPrompt || '').toString().trim();
+    const sendMessages = sys ? [{ role: 'system', content: sys }, ...chat.messages] : chat.messages;
     await streamChat({
       apiUrl: runtimeApiUrl || 'http://localhost:11434/api/chat',
-      model: MODEL,
-      messages: chat.messages,
+      model: (state.selectedModel || MODEL).toString(),
+      temperature: clampNumber(state.creativity, 0, 2, 1),
+      messages: sendMessages,
       signal: streamAbortController.signal,
       onThinking: (token) => {
         if (!assistantMsg._thinkingActive) {
