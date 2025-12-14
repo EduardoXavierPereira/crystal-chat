@@ -5,7 +5,7 @@
   "description": "A privacy-focused local AI chat client powered by Ollama.",
   "main": "main.js",
   "author": "Eduardo Pereira <help.crystalgames@gmail.com>",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "scripts": {
     "start": "electron .",
     "serve:renderer": "npx http-server . -p 4177 -c-1",
