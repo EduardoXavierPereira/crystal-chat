@@ -25,7 +25,10 @@ export function getEls() {
     confirmOkBtn: document.getElementById('confirm-ok'),
     setupModalEl: document.getElementById('setup-modal'),
     setupMessageEl: document.getElementById('setup-message'),
-    setupLogEl: document.getElementById('setup-log'),
+    setupProgressLabelEl: document.getElementById('setup-progress-label'),
+    setupProgressPercentEl: document.getElementById('setup-progress-percent'),
+    setupProgressBarFillEl: document.getElementById('setup-progress-bar-fill'),
+    setupStepsEl: document.getElementById('setup-steps'),
     setupRetryBtn: document.getElementById('setup-retry'),
     setupCloseBtn: document.getElementById('setup-close')
   };

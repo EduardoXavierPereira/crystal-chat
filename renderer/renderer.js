@@ -38,6 +38,111 @@ let setupUnsub = null;
 let initCompleted = false;
 let setupSucceeded = false;
 
+const SETUP_STEPS = [
+  { key: 'install', title: 'Install Ollama', weight: 20 },
+  { key: 'start-server', title: 'Start server', weight: 10 },
+  { key: 'pull-model', title: `Download model (${MODEL})`, weight: 60 },
+  { key: 'finalize', title: 'Finalize', weight: 10 }
+];
+
+const setupStepState = Object.fromEntries(
+  SETUP_STEPS.map((s) => [s.key, { status: 'pending', detail: '' }])
+);
+
+const setupStagePercent = Object.fromEntries(SETUP_STEPS.map((s) => [s.key, 0]));
+
+function renderSetupSteps() {
+  if (!els.setupStepsEl) return;
+  els.setupStepsEl.innerHTML = '';
+  SETUP_STEPS.forEach((s) => {
+    const row = document.createElement('div');
+    row.className = `setup-step ${setupStepState[s.key].status}`;
+
+    const title = document.createElement('div');
+    title.className = 'setup-step-title';
+    title.textContent = s.title;
+
+    const status = document.createElement('div');
+    status.className = 'setup-step-status';
+    status.textContent = setupStepState[s.key].detail || setupStepState[s.key].status;
+
+    row.appendChild(title);
+    row.appendChild(status);
+    els.setupStepsEl.appendChild(row);
+  });
+}
+
+function setSetupOverallProgress({ label, percent }) {
+  if (els.setupProgressLabelEl) {
+    els.setupProgressLabelEl.textContent = (label || '').toString();
+  }
+  if (els.setupProgressPercentEl) {
+    els.setupProgressPercentEl.textContent = Number.isFinite(percent) ? `${Math.max(0, Math.min(100, percent))}%` : '';
+  }
+  if (els.setupProgressBarFillEl) {
+    const p = Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0;
+    els.setupProgressBarFillEl.style.width = `${p}%`;
+  }
+}
+
+function resetSetupProgressUI() {
+  SETUP_STEPS.forEach((s) => {
+    setupStepState[s.key].status = 'pending';
+    setupStepState[s.key].detail = '';
+    setupStagePercent[s.key] = 0;
+  });
+  renderSetupSteps();
+  setSetupOverallProgress({ label: 'Preparing…', percent: 0 });
+}
+
+function computeOverallPercent() {
+  let total = 0;
+  let sum = 0;
+  for (const s of SETUP_STEPS) {
+    total += s.weight;
+    const st = setupStepState[s.key].status;
+    if (st === 'done') sum += s.weight;
+    if (st === 'active') {
+      if (s.key === 'pull-model') {
+        sum += (s.weight * (setupStagePercent[s.key] || 0)) / 100;
+      } else {
+        // Discrete progress for non-download steps.
+        sum += s.weight * 0.5;
+      }
+    }
+  }
+  return total > 0 ? Math.round((sum / total) * 100) : 0;
+}
+
+function setStepStatus(stepKey, status, detail = '') {
+  if (!setupStepState[stepKey]) return;
+  setupStepState[stepKey].status = status;
+  setupStepState[stepKey].detail = detail;
+  renderSetupSteps();
+  setSetupOverallProgress({
+    label: detail || SETUP_STEPS.find((s) => s.key === stepKey)?.title || 'Working…',
+    percent: computeOverallPercent()
+  });
+}
+
+function setStagePercent(stepKey, pct) {
+  if (!setupStepState[stepKey]) return;
+  const p = Math.max(0, Math.min(100, Number(pct) || 0));
+  setupStagePercent[stepKey] = p;
+
+  // Only show a percent label for stages that are currently active.
+  if (setupStepState[stepKey].status === 'active') {
+    const baseLabel =
+      stepKey === 'pull-model'
+        ? 'Downloading model…'
+        : SETUP_STEPS.find((s) => s.key === stepKey)?.title || 'Working…';
+    setStepStatus(stepKey, 'active', `${baseLabel} ${p}%`);
+  } else {
+    // Still update the overall bar even if the step isn't active.
+    setSetupOverallProgress({ label: els.setupProgressLabelEl?.textContent || 'Working…', percent: computeOverallPercent() });
+  }
+}
+
 function showSetupModal(message) {
   if (!els.setupModalEl) return;
   els.setupModalEl.classList.remove('hidden');
@@ -52,33 +157,59 @@ function hideSetupModal() {
   els.setupModalEl.classList.add('hidden');
 }
 
-function appendSetupLogLine(line) {
-  if (!els.setupLogEl) return;
-  const next = `${(line || '').toString()}\n`;
-  els.setupLogEl.textContent += next;
-}
-
 async function ensureOllamaAndModel() {
   const api = window.electronAPI;
   if (!api?.ollamaCheck) return;
 
   showSetupModal(`Checking Ollama + ${MODEL}...`);
-  if (els.setupLogEl) els.setupLogEl.textContent = '';
-  appendSetupLogLine(`Checking dependencies for ${MODEL}...`);
+  resetSetupProgressUI();
+  setSetupOverallProgress({ label: `Checking dependencies for ${MODEL}…`, percent: 0 });
   setupSucceeded = false;
   if (els.setupCloseBtn) els.setupCloseBtn.disabled = true;
 
   if (!setupUnsub && api.onOllamaSetupProgress) {
     setupUnsub = api.onOllamaSetupProgress((payload) => {
       if (!payload) return;
-      if (payload.kind === 'stage' && payload.message) {
-        if (els.setupMessageEl) els.setupMessageEl.textContent = payload.message;
+
+      if (payload.kind === 'stage') {
+        const stage = payload.stage;
+        if (stage && setupStepState[stage]) {
+          // mark stage active
+          Object.keys(setupStepState).forEach((k) => {
+            if (setupStepState[k].status === 'active') setupStepState[k].status = 'pending';
+          });
+          setStepStatus(stage, 'active', payload.message || 'Working…');
+        } else {
+          setSetupOverallProgress({ label: payload.message || 'Working…', percent: computeOverallPercent() });
+        }
       }
-      if (payload.kind === 'log' && payload.line) {
-        appendSetupLogLine(payload.line);
+
+      if (payload.kind === 'done') {
+        const stage = payload.stage;
+        if (stage && setupStepState[stage]) {
+          setStepStatus(stage, 'done', payload.message || 'Done');
+        }
       }
-      if ((payload.kind === 'error' || payload.kind === 'done') && payload.message) {
-        appendSetupLogLine(payload.message);
+
+      if (payload.kind === 'error') {
+        const stage = payload.stage;
+        if (stage && setupStepState[stage]) {
+          setStepStatus(stage, 'error', payload.message || 'Error');
+        } else {
+          setSetupOverallProgress({ label: payload.message || 'Error', percent: computeOverallPercent() });
+        }
+      }
+
+      // Convert raw stdout/stderr into a non-scary percent indicator (best effort).
+      if (payload.kind === 'log' && typeof payload.line === 'string') {
+        const line = payload.line;
+        const m = line.match(/(\d{1,3})\s*%/);
+        if (m) {
+          const pct = Math.max(0, Math.min(100, Number(m[1])));
+          if (setupStepState['pull-model']?.status === 'active') {
+            setStagePercent('pull-model', pct);
+          }
+        }
       }
     });
   }
@@ -86,24 +217,31 @@ async function ensureOllamaAndModel() {
   const initial = await api.ollamaCheck();
 
   if (!initial.hasBinary) {
-    if (els.setupMessageEl) els.setupMessageEl.textContent = 'Ollama is not installed. Installing now...';
-    appendSetupLogLine('Installing Ollama...');
+    if (els.setupMessageEl) {
+      els.setupMessageEl.textContent =
+        'Crystal Chat uses Ollama to run the AI model locally on your computer. Installing Ollama now…';
+    }
+    setStepStatus('install', 'active', 'Installing Ollama…');
     const installRes = await api.ollamaInstall();
     if (!installRes?.ok) {
       if (els.setupMessageEl) els.setupMessageEl.textContent = 'Failed to install Ollama. Click Retry.';
       throw new Error('Ollama install failed.');
     }
-    appendSetupLogLine('Ollama installed.');
+    setStepStatus('install', 'done', 'Installed');
+  } else {
+    setStepStatus('install', 'done', 'Already installed');
   }
 
   if (!initial.serverReachable) {
-    appendSetupLogLine('Starting Ollama server...');
+    setStepStatus('start-server', 'active', 'Starting server…');
     const serverRes = await api.ollamaEnsureServer();
     if (!serverRes?.ok) {
       if (els.setupMessageEl) els.setupMessageEl.textContent = 'Could not start Ollama server. Click Retry.';
       throw new Error('Ollama server not reachable.');
     }
-    appendSetupLogLine('Ollama server reachable.');
+    setStepStatus('start-server', 'done', 'Running');
+  } else {
+    setStepStatus('start-server', 'done', 'Already running');
   }
 
   // Use a reliable model check (via /api/show in the main process) instead of tags.
@@ -117,7 +255,7 @@ async function ensureOllamaAndModel() {
   }
 
   if (!hasModel) {
-    appendSetupLogLine(`Model missing: ${MODEL}`);
+    setStepStatus('pull-model', 'active', 'Downloading model…');
     const pullRes = await api.ollamaPullModel(MODEL);
     if (!pullRes?.ok) {
       if (els.setupMessageEl) els.setupMessageEl.textContent = 'Failed to download model. Click Retry.';
@@ -140,14 +278,15 @@ async function ensureOllamaAndModel() {
     if (!hasModel) {
       throw new Error(`Model still not available after download: ${MODEL}`);
     }
-    appendSetupLogLine('Model installed.');
+    setStepStatus('pull-model', 'done', 'Downloaded');
   } else {
-    appendSetupLogLine('Model already installed.');
+    setStepStatus('pull-model', 'done', 'Already installed');
   }
 
+  setStepStatus('finalize', 'active', 'Finalizing…');
   setupSucceeded = true;
-  if (els.setupMessageEl) els.setupMessageEl.textContent = 'Ready. Click Close to continue.';
-  appendSetupLogLine('Ready. Click Close to continue.');
+  if (els.setupMessageEl) els.setupMessageEl.textContent = 'Ready.';
+  setStepStatus('finalize', 'done', 'Done');
   if (els.setupCloseBtn) els.setupCloseBtn.disabled = false;
 }
 
@@ -336,6 +475,8 @@ async function init() {
       try {
         await ensureOllamaAndModel();
         hideError(els.errorEl);
+        hideSetupModal();
+        await continueInitAfterSetup();
       } catch (e) {
         showSetupModal('Setup failed.');
         appendSetupLogLine(e?.message || 'Setup failed.');
@@ -355,15 +496,14 @@ async function init() {
 
   try {
     await ensureOllamaAndModel();
+    hideSetupModal();
+    await continueInitAfterSetup();
   } catch (e) {
     showSetupModal('Setup failed.');
     appendSetupLogLine(e?.message || 'Setup failed.');
     showError(els.errorEl, e?.message || 'Setup failed.');
     return;
   }
-
-  // Setup succeeded; user must close the modal to continue.
-  showSetupModal('Ready. Click Close to continue.');
 }
 
 function attachEvents() {

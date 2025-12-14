@@ -418,6 +418,9 @@ app.on('window-all-closed', () => {
     app.quit();
   }
 });
+app.on('before-quit', () => {
+  if (ollamaServeProc) ollamaServeProc.kill();
+});
 
 // IPC for Ollama config passthrough if needed later
 ipcMain.handle('ping', () => 'pong');
