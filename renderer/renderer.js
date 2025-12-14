@@ -359,11 +359,6 @@ async function continueInitAfterSetup() {
   });
 }
 
- function getActiveChat() {
-  const activeChatId = state.sidebarSelection.kind === 'chat' ? state.sidebarSelection.id : null;
-  return activeChatId === TEMP_CHAT_ID ? state.tempChat : state.chats.find((c) => c.id === activeChatId);
- }
-
  async function handleCopyMessage(msg) {
   await chatController?.handleCopyMessage?.(msg);
 }
