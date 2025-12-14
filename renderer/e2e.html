@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Crystal Chat (E2E)</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <script>
+      (function () {
+        const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+        window.electronAPI = {
+          ping: async () => 'pong',
+          ollamaGetApiUrl: async () => ({ apiUrl: 'http://localhost:11434/api/chat', host: 'localhost' }),
+          ollamaCheck: async () => ({ hasBinary: true, serverReachable: true, models: [] }),
+          ollamaEnsureServer: async () => ({ ok: true }),
+          ollamaInstall: async () => ({ ok: true }),
+          ollamaHasModel: async () => ({ ok: true }),
+          ollamaPullModel: async () => ({ ok: true }),
+          onOllamaSetupProgress: () => () => {}
+        };
+
+        const realFetch = window.fetch.bind(window);
+
+        function makeChatStreamResponse({ prompt }) {
+          const encoder = new TextEncoder();
+          const chunks = [
+            JSON.stringify({ message: { thinking: 'Thinking...' } }) + '\n',
+            JSON.stringify({ message: { content: `Echo: ${prompt}` } }) + '\n',
+            JSON.stringify({ done: true }) + '\n'
+          ];
+
+          let i = 0;
+          const stream = new ReadableStream({
+            async pull(controller) {
+              if (i >= chunks.length) {
+                controller.close();
+                return;
+              }
+              const part = chunks[i++];
+              controller.enqueue(encoder.encode(part));
+              await sleep(25);
+            }
+          });
+
+          return new Response(stream, {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        window.fetch = async (input, init) => {
+          const url = typeof input === 'string' ? input : input?.url;
+          if (url && url.includes('/api/chat')) {
+            let prompt = '';
+            try {
+              const body = init?.body ? JSON.parse(init.body) : {};
+              const msgs = Array.isArray(body.messages) ? body.messages : [];
+              const last = msgs.filter((m) => m && m.role === 'user').slice(-1)[0];
+              prompt = (last?.content || '').toString();
+            } catch {
+              prompt = '';
+            }
+            return makeChatStreamResponse({ prompt });
+          }
+          return realFetch(input, init);
+        };
+      })();
+    </script>
+
+    <div id="app">
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <button id="new-chat" class="button button-ghost full-width">+ New chat</button>
+        </div>
+        <div class="sidebar-search">
+          <input id="chat-search-input" class="sidebar-search-input" type="text" placeholder="Search chats..." />
+        </div>
+        <div class="pinned-group">
+          <button id="pinned-btn" class="button button-ghost full-width">
+            <span class="icon-text">
+              <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 17.27l-5.18 2.73 1-5.85L3.64 9.24l5.9-.86L12 3l2.46 5.38 5.9.86-4.18 4.91 1 5.85L12 17.27Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+              </svg>
+              Pinned chats
+            </span>
+            <span class="dropdown-chevron" aria-hidden="true">▸</span>
+          </button>
+          <div id="pinned-dropdown" class="pinned-dropdown hidden">
+            <div id="pinned-dropdown-list" class="pinned-dropdown-list"></div>
+          </div>
+        </div>
+        <div id="chat-list" class="chat-list"></div>
+        <button id="trash-btn" class="button button-ghost full-width">
+          <span class="icon-text">
+            <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M10 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M6 7l1 14h10l1-14" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+              <path d="M9 7V4h6v3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+            </svg>
+            Trash
+          </span>
+        </button>
+      </aside>
+      <main class="chat-area">
+        <section id="trash-view" class="trash-view hidden">
+          <div class="trash-header">
+            <div class="trash-title">
+              <span class="icon-text">
+                <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M10 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M6 7l1 14h10l1-14" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                  <path d="M9 7V4h6v3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                </svg>
+                Trash
+              </span>
+            </div>
+            <div class="trash-actions">
+              <button id="trash-restore-all" class="button button-ghost">Restore all</button>
+              <button id="trash-delete-all" class="button button-ghost danger">Delete all</button>
+            </div>
+          </div>
+          <div class="trash-note">Chats in Trash are permanently deleted after 30 days.</div>
+          <div class="trash-search">
+            <input id="trash-search-input" class="trash-search-input" type="text" placeholder="Search trash..." />
+          </div>
+          <div id="trash-list" class="trash-list"></div>
+        </section>
+        <div id="confirm-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+          <div class="modal">
+            <div id="confirm-title" class="modal-title">Confirm</div>
+            <div id="confirm-message" class="modal-message"></div>
+            <div class="modal-actions">
+              <button id="confirm-cancel" class="button button-ghost">Cancel</button>
+              <button id="confirm-ok" class="button button-ghost danger">Delete permanently</button>
+            </div>
+          </div>
+        </div>
+        <div id="setup-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="setup-title">
+          <div class="modal">
+            <div id="setup-title" class="modal-title">Setting up Ollama</div>
+            <div id="setup-message" class="modal-message"></div>
+            <div class="setup-progress">
+              <div class="setup-progress-top">
+                <div id="setup-progress-label" class="setup-progress-label"></div>
+                <div id="setup-progress-percent" class="setup-progress-percent"></div>
+              </div>
+              <div class="setup-progress-bar">
+                <div id="setup-progress-bar-fill" class="setup-progress-bar-fill"></div>
+              </div>
+              <div id="setup-steps" class="setup-steps" aria-label="Setup steps"></div>
+            </div>
+            <div class="modal-actions">
+              <button id="setup-retry" class="button button-ghost">Retry</button>
+              <button id="setup-close" class="button button-ghost">Close</button>
+            </div>
+          </div>
+        </div>
+        <section id="messages" class="messages">
+          <div id="typing-indicator" class="typing chat-typing hidden">
+            <div class="spinner"></div>
+            Waiting for response...
+          </div>
+        </section>
+        <div id="error" class="error hidden"></div>
+        <form id="prompt-form" class="prompt-form">
+          <div class="input-shell">
+            <div class="prompt-tools">
+              <button id="prompt-tools-btn" type="button" class="prompt-tools-btn" aria-label="Chat settings" aria-haspopup="dialog" aria-expanded="false">
+                <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                  <path d="M12 5.5C12 6.88071 10.8807 8 9.5 8C8.11929 8 7 6.88071 7 5.5M12 5.5C12 4.11929 10.8807 3 9.5 3C8.11929 3 7 4.11929 7 5.5M12 5.5H21M7 5.5H3M19 12C19 13.3807 17.8807 14.5 16.5 14.5C15.1193 14.5 14 13.3807 14 12M19 12C19 10.6193 17.8807 9.5 16.5 9.5C15.1193 9.5 14 10.6193 14 12M19 12H21M14 12H3M10 18.5C10 19.8807 8.88071 21 7.5 21C6.11929 21 5 19.88071 5 18.5M10 18.5C10 17.1193 8.88071 16 7.5 16C6.11929 16 5 17.1193 5 18.5M10 18.5H21M5 18.5H3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+              <div id="prompt-tools-popover" class="prompt-tools-popover hidden" role="dialog" aria-label="Chat settings">
+                <div class="prompt-tools-row">
+                  <label class="prompt-tools-label" for="model-select">Model</label>
+                  <div id="model-dropdown" class="prompt-tools-dropdown" aria-label="Model"></div>
+                </div>
+                <div class="prompt-tools-row">
+                  <label class="prompt-tools-label" for="creativity-slider">Creativity</label>
+                  <div class="prompt-tools-slider-wrap">
+                    <input id="creativity-slider" class="prompt-tools-slider" type="range" min="0" max="2" step="0.05" />
+                    <div id="creativity-value" class="prompt-tools-value">1.00</div>
+                  </div>
+                </div>
+                <div class="prompt-tools-row">
+                  <label class="prompt-tools-label" for="system-prompt">System prompt</label>
+                  <textarea id="system-prompt" class="prompt-tools-textarea" rows="2" placeholder="Optional instructions for the assistant..."></textarea>
+                </div>
+                <div id="model-install" class="prompt-tools-install hidden" aria-live="polite">
+                  <div class="prompt-tools-install-top">
+                    <div id="model-install-label" class="prompt-tools-install-label">Downloading…</div>
+                    <div id="model-install-percent" class="prompt-tools-install-percent">0%</div>
+                  </div>
+                  <div class="prompt-tools-install-bar">
+                    <div id="model-install-bar-fill" class="prompt-tools-install-bar-fill"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <textarea id="prompt-input" class="prompt-input" placeholder="Type your message..." rows="1"></textarea>
+            <button id="send-btn" type="submit" class="send-button" aria-label="Send">
+              <span>➤</span>
+            </button>
+          </div>
+        </form>
+      </main>
+    </div>
+
+    <script src="../node_modules/marked/marked.min.js"></script>
+    <script type="module" src="renderer.js"></script>
+  </body>
+</html>

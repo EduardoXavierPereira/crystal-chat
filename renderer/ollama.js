@@ -5,6 +5,7 @@ export async function streamChat({ apiUrl, model, temperature, messages, onToken
     signal,
     body: JSON.stringify({
       model,
+      keep_alive: 0,
       options: Number.isFinite(temperature) ? { temperature } : undefined,
       messages: messages.map(({ role, content }) => ({ role, content })),
       stream: true

@@ -1,6 +1,8 @@
 export const API_URL = 'http://localhost:11434/api/chat';
 export const MODEL = 'qwen3:4b';
 
+export const DEFAULT_SYSTEM_PROMPT = 'You are a helpful chatbot assistant for Crystal Chat. Reply in the user\'s preferred language.';
+
 export const TEMP_CHAT_ID = '__temp_chat__';
 export const UI_STATE_KEY = 'crystal-chat:ui-state';
 export const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -19,7 +21,7 @@ export function createInitialState() {
     pinnedOpen: false,
     selectedModel: MODEL,
     creativity: 1,
-    systemPrompt: '',
+    systemPrompt: DEFAULT_SYSTEM_PROMPT,
     sidebarSelection: { kind: 'chat', id: null }
   };
 }

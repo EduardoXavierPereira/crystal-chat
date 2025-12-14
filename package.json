@@ -1,21 +1,74 @@
 {
   "name": "crystal-chat",
+  "productName": "Crystal Chat",
   "version": "0.1.0",
-  "description": "Simple Electron chatbot using local Ollama inference with IndexedDB chat history.",
+  "description": "A privacy-focused local AI chat client powered by Ollama.",
   "main": "main.js",
+  "author": "Eduardo Pereira <help.crystalgames@gmail.com>",
+  "license": "MIT",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "serve:renderer": "npx http-server . -p 4177 -c-1",
+    "e2e": "start-server-and-test serve:renderer http://localhost:4177 cypress:run",
+    "e2e:open": "start-server-and-test serve:renderer http://localhost:4177 cypress:open",
+    "cypress:open": "cypress open",
+    "cypress:run": "cypress run",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac",
+    "dist:linux": "electron-builder --linux"
   },
   "keywords": [
     "electron",
     "ollama",
     "chat",
-    "local"
+    "local",
+    "ai"
   ],
-  "author": "",
-  "license": "MIT",
+  "build": {
+    "appId": "com.crystalgames.crystalchat",
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!dist/*",
+      "!node_modules/.cache/*",
+      "!cypress/*",
+      "!cypress.config.js",
+      "!**/*.map"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "deleteAppDataOnUninstall": true
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "build/icon.icns",
+      "category": "public.app-category.productivity",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "build/icon.png",
+      "category": "Utility",
+      "synopsis": "Local AI Chat Client"
+    }
+  },
   "devDependencies": {
-    "electron": "^30.0.9"
+    "cypress": "^13.15.0",
+    "electron": "^30.0.9",
+    "electron-builder": "^26.0.12",
+    "http-server": "^14.1.1",
+    "start-server-and-test": "^2.0.8"
   },
   "dependencies": {
     "marked": "^12.0.2"

@@ -19,7 +19,7 @@ import {
 import { autosizePrompt, showError, hideError, openConfirm, closeConfirm } from './input.js';
 import { renderTrash } from './trash.js';
 import { renderPinnedDropdown } from './pinned.js';
-import { renderActiveChat } from './messages.js';
+import { renderActiveChat, updateRenderedMessage } from './messages.js';
 import { createCustomDropdown } from './customDropdown.js';
 import { formatModelName } from './formatModelName.js';
 
@@ -1058,35 +1058,79 @@ async function streamAssistant(chat) {
   };
   chat.messages.push(assistantMsg);
   renderActiveChatUI();
+  const assistantIndex = chat.messages.length - 1;
+
+  let lastStreamingFullRenderTs = 0;
+
+  const updateStreamingMessage = () => {
+    const ok = updateRenderedMessage({ els, msg: assistantMsg, messageIndex: assistantIndex });
+    if (ok) return;
+    const now = Date.now();
+    if (now - lastStreamingFullRenderTs < 250) return;
+    lastStreamingFullRenderTs = now;
+    renderActiveChatUI();
+  };
   try {
     const sys = (state.systemPrompt || '').toString().trim();
-    const sendMessages = sys ? [{ role: 'system', content: sys }, ...chat.messages] : chat.messages;
-    await streamChat({
-      apiUrl: runtimeApiUrl || 'http://localhost:11434/api/chat',
-      model: (state.selectedModel || MODEL).toString(),
-      temperature: clampNumber(state.creativity, 0, 2, 1),
-      messages: sendMessages,
-      signal: streamAbortController.signal,
-      onThinking: (token) => {
-        if (!assistantMsg._thinkingActive) {
-          assistantMsg._thinkingActive = true;
-          assistantMsg._thinkingOpen = true;
-          assistantMsg._thinkingUserToggled = false;
-        }
-        assistantMsg.thinking += token;
-        renderActiveChatUI();
-      },
-      onToken: (token) => {
-        if (assistantMsg._thinkingActive) {
-          assistantMsg._thinkingActive = false;
-          if (!assistantMsg._thinkingUserToggled) {
-            assistantMsg._thinkingOpen = false;
+    const hardSys = 'Reply in the same language as the user. Do not default to Chinese unless the user wants Chinese responses.';
+    const combinedSystem = sys ? `${hardSys}\n\n${sys}` : hardSys;
+
+    // IMPORTANT: don't send the local placeholder assistant message to Ollama.
+    // Some models/templates behave poorly if the last message is an empty assistant.
+    const historyMessages = chat.messages.slice(0, -1);
+
+    const sendMessages = [{ role: 'system', content: combinedSystem }, ...historyMessages];
+
+    const isTransientOllamaLoadError = (message) => {
+      const m = (message || '').toString();
+      return /do load request/i.test(m) && /\bEOF\b/i.test(m);
+    };
+
+    const runStream = async () => {
+      await streamChat({
+        apiUrl: runtimeApiUrl || 'http://localhost:11434/api/chat',
+        model: (state.selectedModel || MODEL).toString(),
+        temperature: clampNumber(state.creativity, 0, 2, 1),
+        messages: sendMessages,
+        signal: streamAbortController.signal,
+        onThinking: (token) => {
+          if (!assistantMsg._thinkingActive) {
+            assistantMsg._thinkingActive = true;
+            assistantMsg._thinkingOpen = true;
+            assistantMsg._thinkingUserToggled = false;
           }
+          assistantMsg.thinking += token;
+          updateStreamingMessage();
+        },
+        onToken: (token) => {
+          if (assistantMsg._thinkingActive) {
+            assistantMsg._thinkingActive = false;
+            if (!assistantMsg._thinkingUserToggled) {
+              assistantMsg._thinkingOpen = false;
+            }
+          }
+          assistantMsg.content += token;
+          updateStreamingMessage();
         }
-        assistantMsg.content += token;
-        renderActiveChatUI();
+      });
+    };
+
+    try {
+      await runStream();
+    } catch (e) {
+      if (isTransientOllamaLoadError(e?.message) && !streamAbortController?.signal?.aborted) {
+        const api = window.electronAPI;
+        try {
+          await api?.ollamaEnsureServer?.();
+        } catch {
+          // ignore
+        }
+        await new Promise((r) => setTimeout(r, 400));
+        await runStream();
+      } else {
+        throw e;
       }
-    });
+    }
 
     assistantMsg._done = true;
     renderActiveChatUI();

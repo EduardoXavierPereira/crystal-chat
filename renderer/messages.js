@@ -1,8 +1,109 @@
 import { applySuggestionToPrompt } from './newchat.js';
 
+export function updateRenderedMessage({ els, msg, messageIndex } = {}) {
+  if (!els?.messagesEl) return false;
+  if (!msg) return false;
+  if (typeof messageIndex !== 'number') return false;
+
+  const root = els.messagesEl.querySelector(`.message[data-message-index="${messageIndex}"]`);
+  if (!root) return false;
+
+  // Update assistant content
+  const contentEl = root.querySelector('.message-content');
+  if (contentEl) {
+    if (msg.role === 'assistant' && window.marked) {
+      contentEl.innerHTML = window.marked.parse(msg.content || '');
+    } else {
+      contentEl.textContent = (msg.content || '').toString();
+    }
+  }
+
+  // Update thinking section
+  const thinkingWrap = root.querySelector('.thinking');
+  const shouldHaveThinking = msg.role === 'assistant' && (msg.thinking || msg._thinkingActive);
+
+  if (!shouldHaveThinking) {
+    if (thinkingWrap) thinkingWrap.remove();
+    return true;
+  }
+
+  let wrap = thinkingWrap;
+  if (!wrap) {
+    wrap = document.createElement('div');
+    wrap.className = 'thinking';
+
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'thinking-toggle';
+
+    const toggleText = document.createElement('span');
+    toggleText.className = 'thinking-toggle-text';
+    toggleText.innerHTML =
+      '<span class="thinking-toggle-icon" aria-hidden="true">'
+      + '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" xmlns="http://www.w3.org/2000/svg">'
+      + '<path d="M10 16.584V18.9996C10 20.1042 10.8954 20.9996 12 20.9996C13.1046 20.9996 14 20.1042 14 18.9996L14 16.584M12 3V4M18.3643 5.63574L17.6572 6.34285M5.63574 5.63574L6.34285 6.34285M4 12H3M21 12H20M17 12C17 14.7614 14.7614 17 12 17C9.23858 17 7 14.7614 7 12C7 9.23858 9.23858 7 12 7C14.7614 7 17 9.23858 17 12Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
+      + '</svg>'
+      + '</span>'
+      + `<span class="thinking-toggle-label">${msg._thinkingActive ? 'Thinking…' : 'Thinking'}</span>`;
+
+    const chevron = document.createElement('span');
+    chevron.className = 'thinking-chevron';
+    chevron.setAttribute('aria-hidden', 'true');
+    chevron.textContent = '▸';
+
+    const body = document.createElement('pre');
+    body.className = 'thinking-body';
+    body.textContent = msg.thinking || '';
+    body.dataset.messageIndex = String(messageIndex);
+    body.classList.toggle('hidden', !msg._thinkingOpen);
+    const savedScrollTop = Number.isFinite(msg._thinkingScrollTop) ? msg._thinkingScrollTop : 0;
+    body.scrollTop = Math.max(0, savedScrollTop);
+    body.onscroll = () => {
+      if (!msg._thinkingOpen) return;
+      msg._thinkingScrollTop = body.scrollTop;
+    };
+
+    toggle.onclick = () => {
+      msg._thinkingOpen = !msg._thinkingOpen;
+      msg._thinkingUserToggled = true;
+      body.classList.toggle('hidden', !msg._thinkingOpen);
+      toggle.classList.toggle('open', !!msg._thinkingOpen);
+    };
+
+    toggle.classList.toggle('open', !!msg._thinkingOpen);
+    toggle.appendChild(toggleText);
+    toggle.appendChild(chevron);
+
+    wrap.appendChild(toggle);
+    wrap.appendChild(body);
+
+    const header = root.querySelector('.message-header');
+    if (header && header.nextSibling) {
+      root.insertBefore(wrap, header.nextSibling);
+    } else {
+      root.insertBefore(wrap, root.firstChild);
+    }
+  }
+
+  const toggle = wrap.querySelector('.thinking-toggle');
+  const body = wrap.querySelector('.thinking-body');
+  if (toggle) {
+    toggle.classList.toggle('open', !!msg._thinkingOpen);
+    const lbl = toggle.querySelector('.thinking-toggle-label');
+    if (lbl) lbl.textContent = msg._thinkingActive ? 'Thinking…' : 'Thinking';
+  }
+  if (body) {
+    body.textContent = msg.thinking || '';
+    body.classList.toggle('hidden', !msg._thinkingOpen);
+  }
+
+  return true;
+}
+
 export function renderMessageElement(msg, { onCopy, onRegenerate, messageIndex } = {}) {
   const div = document.createElement('div');
   div.className = `message ${msg.role === 'user' ? 'user' : 'assistant'}`;
+  if (typeof messageIndex === 'number') div.dataset.messageIndex = String(messageIndex);
 
   const header = document.createElement('div');
   header.className = 'message-header';
@@ -71,6 +172,14 @@ export function renderMessageElement(msg, { onCopy, onRegenerate, messageIndex }
     body.className = 'thinking-body';
     body.textContent = msg.thinking || '';
     body.classList.toggle('hidden', !msg._thinkingOpen);
+    if (typeof messageIndex === 'number') body.dataset.messageIndex = String(messageIndex);
+
+    const savedScrollTop = Number.isFinite(msg._thinkingScrollTop) ? msg._thinkingScrollTop : 0;
+    body.scrollTop = Math.max(0, savedScrollTop);
+    body.onscroll = () => {
+      if (!msg._thinkingOpen) return;
+      msg._thinkingScrollTop = body.scrollTop;
+    };
 
     thinkingWrap.appendChild(toggle);
     thinkingWrap.appendChild(body);
@@ -154,6 +263,28 @@ export function renderActiveChat({
   if (els.errorEl) els.errorEl.classList.toggle('hidden', inTrash || els.errorEl.textContent === '');
 
   if (inTrash) return;
+
+  let messagesScrollTop = 0;
+  try {
+    messagesScrollTop = els.messagesEl.scrollTop;
+  } catch {
+    messagesScrollTop = 0;
+  }
+
+  try {
+    els.messagesEl.querySelectorAll('.thinking-body[data-message-index]').forEach((el) => {
+      if (el.classList.contains('hidden')) return;
+      const idx = el.dataset.messageIndex;
+      if (!idx) return;
+      const i = Number(idx);
+      if (!Number.isFinite(i) || i < 0) return;
+      const m = chat?.messages?.[i];
+      if (!m) return;
+      m._thinkingScrollTop = el.scrollTop;
+    });
+  } catch {
+    // ignore
+  }
 
   els.messagesEl.innerHTML = '';
   els.messagesEl.classList.toggle('empty', false);
@@ -287,4 +418,29 @@ export function renderActiveChat({
     }));
   });
   els.messagesEl.appendChild(typingIndicator);
+
+  // Restore scroll after layout to avoid it being clobbered while the element is still measuring.
+  window.requestAnimationFrame(() => {
+    try {
+      els.messagesEl.querySelectorAll('.thinking-body[data-message-index]').forEach((el) => {
+        if (el.classList.contains('hidden')) return;
+        const idx = el.dataset.messageIndex;
+        if (!idx) return;
+        const i = Number(idx);
+        if (!Number.isFinite(i) || i < 0) return;
+        const m = chat?.messages?.[i];
+        if (!m) return;
+        const st = Number.isFinite(m._thinkingScrollTop) ? m._thinkingScrollTop : 0;
+        el.scrollTop = Math.max(0, st);
+      });
+    } catch {
+      // ignore
+    }
+
+    try {
+      els.messagesEl.scrollTop = messagesScrollTop;
+    } catch {
+      // ignore
+    }
+  });
 }
