@@ -1,9 +1,11 @@
 export function getEls() {
   return {
     chatListEl: document.getElementById('chat-list'),
+    chatSearchInput: document.getElementById('chat-search-input'),
     messagesEl: document.getElementById('messages'),
     promptForm: document.getElementById('prompt-form'),
     promptInput: document.getElementById('prompt-input'),
+    sendBtn: document.getElementById('send-btn'),
     typingIndicator: document.getElementById('typing-indicator'),
     errorEl: document.getElementById('error'),
     newChatBtn: document.getElementById('new-chat'),
@@ -35,13 +37,41 @@ export function chatTitleFromMessages(chat) {
   return trimmed.slice(0, 32) + (trimmed.length > 32 ? '…' : '');
 }
 
+function escapeHtml(text) {
+  return (text || '').replace(/[&<>"']/g, (ch) => {
+    switch (ch) {
+      case '&':
+        return '&amp;';
+      case '<':
+        return '&lt;';
+      case '>':
+        return '&gt;';
+      case '"':
+        return '&quot;';
+      case "'":
+        return '&#39;';
+      default:
+        return ch;
+    }
+  });
+}
+
+function escapeRegExp(text) {
+  return (text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 export function renderChats({ els, state, onSetActiveChat, onStartRename, onTrashChat, onTogglePinned }) {
   els.chatListEl.innerHTML = '';
   els.trashBtn?.classList.toggle('active', state.sidebarSelection.kind === 'trash');
   els.pinnedBtn?.classList.toggle('active', !!state.pinnedOpen);
   els.pinnedBtn?.classList.toggle('open', !!state.pinnedOpen);
 
-  state.chats.forEach((chat) => {
+  const query = (state.chatQuery || '').trim().toLowerCase();
+  const chats = query
+    ? state.chats.filter((chat) => chatTitleFromMessages(chat).toLowerCase().includes(query))
+    : state.chats;
+
+  chats.forEach((chat) => {
     const item = document.createElement('div');
     item.className = `chat-item ${state.sidebarSelection.kind === 'chat' && chat.id === state.sidebarSelection.id ? 'active' : ''}`;
     item.onclick = () => onSetActiveChat(chat.id);
@@ -70,7 +100,15 @@ export function renderChats({ els, state, onSetActiveChat, onStartRename, onTras
       requestAnimationFrame(() => input.focus());
     } else {
       const name = document.createElement('div');
-      name.textContent = chatTitleFromMessages(chat);
+      const title = chatTitleFromMessages(chat);
+      if (query) {
+        const safeTitle = escapeHtml(title);
+        const safeQuery = escapeRegExp(query);
+        const re = new RegExp(safeQuery, 'ig');
+        name.innerHTML = safeTitle.replace(re, (m) => `<mark class="chat-search-hit">${escapeHtml(m)}</mark>`);
+      } else {
+        name.textContent = title;
+      }
       content.appendChild(name);
     }
 

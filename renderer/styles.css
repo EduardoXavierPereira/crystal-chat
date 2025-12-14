@@ -19,13 +19,13 @@
 .message.assistant .message-content code {
   background: rgba(255, 255, 255, 0.06);
   padding: 0.1em 0.25em;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   font-family: var(--mono, "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace);
 }
 
 .message.assistant .message-content pre {
   background: rgba(255, 255, 255, 0.06);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 10px;
   overflow-x: auto;
   margin: 0.3em 0 0.6em 0;
@@ -45,11 +45,29 @@
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--muted);
-  border-radius: 10px;
+  border-radius: var(--radius-ml);
   padding: 8px 10px;
   cursor: pointer;
   font-weight: 650;
 }
+
+ .thinking-toggle-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+ }
+
+ .thinking-toggle-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+ }
+
+ .thinking-toggle-icon svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+ }
 
 .thinking-toggle:hover {
   border-color: rgba(255, 255, 255, 0.16);
@@ -70,7 +88,7 @@
 .thinking-body {
   margin: 8px 0 0 0;
   padding: 10px;
-  border-radius: 10px;
+  border-radius: var(--radius-ml);
   border: 1px solid rgba(255, 255, 255, 0.06);
   background: rgba(255, 255, 255, 0.02);
   color: var(--muted);
@@ -91,7 +109,16 @@
   --accent: #7fc9ff;
   --danger: #ff6b6b;
   --border: rgba(255, 255, 255, 0.08);
-  --radius: 12px;
+  --radius-none: 0px;
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-ml: 10px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+  --radius-pill: 999px;
+  --radius-circle: 50%;
+  --radius: var(--radius-lg);
   --sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
   --scrollbar-track: rgba(255, 255, 255, 0.02);
   --scrollbar-thumb: rgba(70, 70, 78, 0.95);
@@ -145,6 +172,26 @@ body {
   justify-content: center;
   gap: 8px;
 }
+
+ .sidebar-search {
+  display: flex;
+  align-items: center;
+ }
+
+ .sidebar-search-input {
+  width: 100%;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  font-family: var(--sans);
+ }
+
+ .sidebar-search-input:focus {
+  outline: 1px solid rgba(77, 163, 255, 0.4);
+ }
 
 .button {
   background: var(--accent);
@@ -230,13 +277,13 @@ body {
   border: 1px solid var(--border);
   border-top: 0;
   background: rgba(255, 255, 255, 0.02);
-  border-radius: 0 0 12px 12px;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   padding: 6px 6px 6px 6px;
 }
 
 #pinned-btn.open {
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
+  border-bottom-left-radius: var(--radius-none);
+  border-bottom-right-radius: var(--radius-none);
   border-bottom: 0;
 }
 
@@ -250,7 +297,7 @@ body {
   border: none;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.015);
-  border-radius: 10px;
+  border-radius: var(--radius-ml);
   padding: 9px 10px;
   cursor: pointer;
 }
@@ -378,6 +425,13 @@ body {
   white-space: nowrap;
 }
 
+ .chat-search-hit {
+  background: rgba(127, 201, 255, 0.22);
+  color: inherit;
+  padding: 0 2px;
+  border-radius: var(--radius-xs);
+ }
+
 .chat-actions {
   display: flex;
   align-items: center;
@@ -395,7 +449,7 @@ body {
 .chat-menu-btn {
   width: 26px;
   height: 26px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text);
@@ -418,7 +472,7 @@ body {
   min-width: 150px;
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-ml);
   padding: 6px;
   z-index: 20;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
@@ -433,7 +487,7 @@ body {
   background: transparent;
   border: 1px solid transparent;
   color: var(--text);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 8px 10px;
   cursor: pointer;
   font-weight: 600;
@@ -469,7 +523,7 @@ body {
 .chat-delete {
   width: 26px;
   height: 26px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text);
@@ -595,7 +649,7 @@ body {
 .temp-chat-switch {
   width: 38px;
   height: 22px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.06);
   position: relative;
@@ -609,7 +663,7 @@ body {
   left: 3px;
   width: 16px;
   height: 16px;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
   background: rgba(255, 255, 255, 0.85);
   transform: translateY(-50%);
   transition: transform 0.12s ease, background 0.12s ease;
@@ -691,14 +745,50 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   position: relative;
-  border-radius: 14px 14px 6px 14px;
+  border-radius: var(--radius-xl) var(--radius-xl) var(--radius-sm) var(--radius-xl);
 }
 
 .message.assistant {
   background: rgba(255, 255, 255, 0.01);
   border: 1px solid rgba(255, 255, 255, 0.02);
-  border-radius: 14px 14px 14px 6px;
+  border-radius: var(--radius-xl) var(--radius-xl) var(--radius-xl) var(--radius-sm);
 }
+
+ .message-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  opacity: 1;
+  pointer-events: auto;
+ }
+
+ .message-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  border-radius: var(--radius-md);
+  padding: 6px 10px;
+  cursor: pointer;
+  font-weight: 600;
+ }
+
+ .message-action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+ }
+
+ .message-action-icon svg {
+  display: block;
+ }
+
+ .message-action:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+ }
 
 .message.user::before {
   content: "";
@@ -707,7 +797,7 @@ body {
   top: 10px;
   bottom: 10px;
   width: 3px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--accent);
 }
 
@@ -757,7 +847,7 @@ body {
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.02);
   color: var(--text);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   padding: 14px 14px;
   font-size: 0.98rem;
   line-height: 1.35;
@@ -794,7 +884,7 @@ body {
   align-items: flex-end;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   padding: 8px;
 }
 
@@ -863,7 +953,7 @@ body {
   background: transparent;
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 10px 12px;
   font-size: 0.95rem;
   font-family: var(--sans);
@@ -912,7 +1002,7 @@ body {
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text);
-  border-radius: 10px;
+  border-radius: var(--radius-ml);
   padding: 8px 10px;
   cursor: pointer;
   font-weight: 600;
@@ -978,7 +1068,7 @@ body {
   width: 30px;
   height: 30px;
   border: none;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
   background: var(--accent);
   color: #0b0b0f;
   font-weight: 700;
@@ -988,6 +1078,10 @@ body {
   justify-content: center;
   transition: background 0.12s ease;
 }
+
+ .send-button svg {
+  display: block;
+ }
 
 .send-button:hover {
   background: #9ad6ff;
@@ -1016,8 +1110,10 @@ body {
   height: 16px;
   border: 3px solid rgba(255, 255, 255, 0.15);
   border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+  border-radius: var(--radius-circle);
+  display: inline-block;
+  will-change: transform;
+  animation: cc-spin 0.8s linear infinite !important;
 }
 
 .chat-typing {
@@ -1071,7 +1167,7 @@ body::-webkit-scrollbar-track,
 .prompt-input::-webkit-scrollbar-track,
 .chat-list::-webkit-scrollbar-track {
   background: var(--scrollbar-track) !important;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 
 html::-webkit-scrollbar-thumb,
@@ -1082,7 +1178,7 @@ body::-webkit-scrollbar-thumb,
 .prompt-input::-webkit-scrollbar-thumb,
 .chat-list::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb) !important;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 2px solid rgba(255, 255, 255, 0.02);
 }
 
@@ -1108,7 +1204,7 @@ body::-webkit-scrollbar-button,
   height: 0 !important;
 }
 
-@keyframes spin {
+@keyframes cc-spin {
   to {
     transform: rotate(360deg);
   }

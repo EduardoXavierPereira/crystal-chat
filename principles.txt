@@ -1,4 +1,4 @@
-Don’t over-engineer: AI is expensive and slow. Use simpler computing as much as possible.
+Don’t over-engineer: AI is expensive and slow. Use simpler computing as much as possible. Non-AI UX changes are better than with AI, especially since this is local AI.
 
 Work out of the box: especially with local AI, it’s important that, after installing, the system works fully out of the box.
 

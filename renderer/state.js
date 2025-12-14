@@ -11,6 +11,7 @@ export function createInitialState() {
     isStreaming: false,
     pendingNew: false,
     renamingId: null,
+    chatQuery: '',
     trashQuery: '',
     confirmAction: null,
     temporaryChatEnabled: false,
@@ -23,6 +24,7 @@ export function createInitialState() {
 export function saveUIState(state) {
   try {
     const toSave = {
+      chatQuery: (state.chatQuery || '').toString(),
       pinnedOpen: !!state.pinnedOpen,
       sidebarSelection:
         state.sidebarSelection.kind === 'chat' && state.sidebarSelection.id === TEMP_CHAT_ID

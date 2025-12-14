@@ -1,6 +1,6 @@
 import { applySuggestionToPrompt } from './newchat.js';
 
-export function renderMessageElement(msg) {
+export function renderMessageElement(msg, { onCopy, onRegenerate, messageIndex } = {}) {
   const div = document.createElement('div');
   div.className = `message ${msg.role === 'user' ? 'user' : 'assistant'}`;
 
@@ -43,7 +43,13 @@ export function renderMessageElement(msg) {
     toggle.className = 'thinking-toggle';
     const toggleText = document.createElement('span');
     toggleText.className = 'thinking-toggle-text';
-    toggleText.textContent = msg._thinkingActive ? 'Thinking…' : 'Thinking';
+    toggleText.innerHTML =
+      '<span class="thinking-toggle-icon" aria-hidden="true">'
+      + '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" xmlns="http://www.w3.org/2000/svg">'
+      + '<path d="M10 16.584V18.9996C10 20.1042 10.8954 20.9996 12 20.9996C13.1046 20.9996 14 20.1042 14 18.9996L14 16.584M12 3V4M18.3643 5.63574L17.6572 6.34285M5.63574 5.63574L6.34285 6.34285M4 12H3M21 12H20M17 12C17 14.7614 14.7614 17 12 17C9.23858 17 7 14.7614 7 12C7 9.23858 9.23858 7 12 7C14.7614 7 17 9.23858 17 12Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
+      + '</svg>'
+      + '</span>'
+      + `<span class="thinking-toggle-label">${msg._thinkingActive ? 'Thinking…' : 'Thinking'}</span>`;
 
     const chevron = document.createElement('span');
     chevron.className = 'thinking-chevron';
@@ -71,10 +77,73 @@ export function renderMessageElement(msg) {
     div.appendChild(thinkingWrap);
   }
   div.appendChild(content);
+
+  if (msg.role === 'assistant' && msg._done !== false) {
+    const actions = document.createElement('div');
+    actions.className = 'message-actions';
+
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'message-action';
+    copyBtn.innerHTML =
+      '<span class="message-action-icon" aria-hidden="true">'
+      + '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" xmlns="http://www.w3.org/2000/svg">'
+      + '<rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="2"/>'
+      + '<path d="M7 15H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
+      + '</svg>'
+      + '</span>'
+      + '<span class="message-action-text">Copy</span>';
+    copyBtn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onCopy?.(msg, messageIndex);
+
+      const textEl = copyBtn.querySelector('.message-action-text');
+      if (!textEl) return;
+      textEl.textContent = 'Copied!';
+      if (copyBtn._copiedTimer) {
+        window.clearTimeout(copyBtn._copiedTimer);
+      }
+      copyBtn._copiedTimer = window.setTimeout(() => {
+        textEl.textContent = 'Copy';
+        copyBtn._copiedTimer = null;
+      }, 1000);
+    };
+
+    const regenBtn = document.createElement('button');
+    regenBtn.type = 'button';
+    regenBtn.className = 'message-action';
+    regenBtn.innerHTML =
+      '<span class="message-action-icon" aria-hidden="true">'
+      + '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" xmlns="http://www.w3.org/2000/svg">'
+      + '<path d="M21 12C21 16.9706 16.9706 21 12 21C9.69494 21 7.59227 20.1334 6 18.7083L3 16M3 12C3 7.02944 7.02944 3 12 3C14.3051 3 16.4077 3.86656 18 5.29168L21 8M3 21V16M3 16H8M21 3V8M21 8H16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
+      + '</svg>'
+      + '</span>'
+      + '<span class="message-action-text">Regenerate</span>';
+    regenBtn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onRegenerate?.(msg, messageIndex);
+    };
+
+    actions.appendChild(copyBtn);
+    actions.appendChild(regenBtn);
+    div.appendChild(actions);
+  }
   return div;
 }
 
-export function renderActiveChat({ els, state, tempChatId, tempChat, typingIndicator, autosizePrompt, onSuggestion }) {
+export function renderActiveChat({
+  els,
+  state,
+  tempChatId,
+  tempChat,
+  typingIndicator,
+  autosizePrompt,
+  onSuggestion,
+  onCopyMessage,
+  onRegenerateMessage
+}) {
   const activeChatId = state.sidebarSelection.kind === 'chat' ? state.sidebarSelection.id : null;
   const chat = activeChatId === tempChatId ? tempChat : state.chats.find((c) => c.id === activeChatId);
 
@@ -210,8 +279,12 @@ export function renderActiveChat({ els, state, tempChatId, tempChat, typingIndic
     return;
   }
 
-  chat.messages.forEach((msg) => {
-    els.messagesEl.appendChild(renderMessageElement(msg));
+  chat.messages.forEach((msg, messageIndex) => {
+    els.messagesEl.appendChild(renderMessageElement(msg, {
+      onCopy: onCopyMessage,
+      onRegenerate: onRegenerateMessage,
+      messageIndex
+    }));
   });
   els.messagesEl.appendChild(typingIndicator);
 }

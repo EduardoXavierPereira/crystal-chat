@@ -25,7 +25,110 @@ import { renderActiveChat } from './messages.js';
 const els = getEls();
 const state = createInitialState();
 
+let streamAbortController = null;
+
+let spinnerRafId = null;
+let spinnerLastTs = 0;
+let spinnerAngle = 0;
+
 let db;
+
+function startTypingSpinnerFallback() {
+  if (spinnerRafId) return;
+  const spinnerEl = els.typingIndicator?.querySelector?.('.spinner');
+  if (!spinnerEl) return;
+
+  spinnerLastTs = 0;
+  const step = (ts) => {
+    if (!els.typingIndicator || els.typingIndicator.classList.contains('hidden')) {
+      spinnerRafId = null;
+      spinnerLastTs = 0;
+      spinnerAngle = 0;
+      spinnerEl.style.transform = '';
+      return;
+    }
+    if (!spinnerLastTs) spinnerLastTs = ts;
+    const dt = ts - spinnerLastTs;
+    spinnerLastTs = ts;
+
+    // Match the original 0.8s CSS duration.
+    spinnerAngle = (spinnerAngle + (dt / 800) * 360) % 360;
+    spinnerEl.style.transform = `rotate(${spinnerAngle}deg)`;
+    spinnerRafId = window.requestAnimationFrame(step);
+  };
+
+  spinnerRafId = window.requestAnimationFrame(step);
+}
+
+function stopTypingSpinnerFallback() {
+  if (spinnerRafId) {
+    window.cancelAnimationFrame(spinnerRafId);
+    spinnerRafId = null;
+  }
+  spinnerLastTs = 0;
+  spinnerAngle = 0;
+  const spinnerEl = els.typingIndicator?.querySelector?.('.spinner');
+  if (spinnerEl) spinnerEl.style.transform = '';
+}
+
+ function getActiveChat() {
+  const activeChatId = state.sidebarSelection.kind === 'chat' ? state.sidebarSelection.id : null;
+  return activeChatId === TEMP_CHAT_ID ? state.tempChat : state.chats.find((c) => c.id === activeChatId);
+ }
+
+ async function copyTextToClipboard(text) {
+  const toCopy = (text || '').toString();
+  if (!toCopy) return;
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(toCopy);
+      return;
+    }
+  } catch {
+    // ignore
+  }
+  const ta = document.createElement('textarea');
+  ta.value = toCopy;
+  ta.setAttribute('readonly', '');
+  ta.style.position = 'fixed';
+  ta.style.left = '-9999px';
+  ta.style.top = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    document.execCommand('copy');
+  } catch {
+    // ignore
+  }
+  ta.remove();
+ }
+
+ async function handleCopyMessage(msg) {
+  await copyTextToClipboard(msg?.content || '');
+ }
+
+ async function handleRegenerateMessage(msg, messageIndex) {
+  if (state.isStreaming) return;
+  if (!msg || msg.role !== 'assistant') return;
+  if (typeof messageIndex !== 'number' || messageIndex < 1) return;
+  if (state.sidebarSelection.kind !== 'chat') return;
+
+  const chat = getActiveChat();
+  if (!chat) return;
+
+  const prev = chat.messages[messageIndex - 1];
+  if (!prev || prev.role !== 'user') return;
+
+  chat.messages = chat.messages.slice(0, messageIndex);
+  hideError(els.errorEl);
+  renderActiveChatUI();
+  if (chat.id !== TEMP_CHAT_ID) {
+    await saveChat(db, chat);
+    renderChatsUI();
+  }
+
+  await streamAssistant(chat);
+ }
 
 init();
 
@@ -51,6 +154,7 @@ async function init() {
   const ui = loadUIState();
   const savedSel = ui?.sidebarSelection;
   state.pinnedOpen = !!(ui?.pinnedOpen ?? ui?.favoritesOpen);
+  state.chatQuery = (ui?.chatQuery || '').toString();
 
   const migrated = [];
   state.chats.forEach((chat) => {
@@ -82,6 +186,9 @@ async function init() {
   renderChatsUI();
   renderActiveChatUI();
   attachEvents();
+  if (els.chatSearchInput) {
+    els.chatSearchInput.value = state.chatQuery;
+  }
   autosizePrompt(els.promptInput);
   requestAnimationFrame(() => {
     if (document.activeElement === document.body) els.promptInput?.focus();
@@ -97,6 +204,20 @@ function attachEvents() {
       handleSubmit(e);
     }
   });
+
+  els.sendBtn?.addEventListener('click', (e) => {
+    if (!state.isStreaming) return;
+    e.preventDefault();
+    e.stopPropagation();
+    streamAbortController?.abort();
+  });
+
+  els.chatSearchInput?.addEventListener('input', () => {
+    state.chatQuery = (els.chatSearchInput.value || '').trim().toLowerCase();
+    saveUIState(state);
+    renderChatsUI();
+  });
+
   els.newChatBtn.addEventListener('click', async () => {
     state.pendingNew = true;
     applySidebarSelection({ kind: 'chat', id: null });
@@ -261,7 +382,9 @@ function renderActiveChatUI() {
     tempChatId: TEMP_CHAT_ID,
     tempChat: state.tempChat,
     typingIndicator: els.typingIndicator,
-    autosizePrompt
+    autosizePrompt,
+    onCopyMessage: handleCopyMessage,
+    onRegenerateMessage: handleRegenerateMessage
   });
 
   if (state.sidebarSelection.kind === 'trash') {
@@ -404,10 +527,21 @@ async function commitRename(id, title) {
 async function streamAssistant(chat) {
   state.isStreaming = true;
   els.typingIndicator.classList.remove('hidden');
+  startTypingSpinnerFallback();
+  if (els.sendBtn) {
+    els.sendBtn.setAttribute('aria-label', 'Pause');
+    els.sendBtn.innerHTML =
+      '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
+      + '<rect x="7" y="6" width="3.5" height="12" rx="1" fill="currentColor" />'
+      + '<rect x="13.8" y="6" width="3.5" height="12" rx="1" fill="currentColor" />'
+      + '</svg>';
+  }
+  streamAbortController = new AbortController();
   const assistantMsg = {
     role: 'assistant',
     content: '',
     thinking: '',
+    _done: false,
     _thinkingActive: false,
     _thinkingOpen: false,
     _thinkingUserToggled: false
@@ -419,6 +553,7 @@ async function streamAssistant(chat) {
       apiUrl: API_URL,
       model: MODEL,
       messages: chat.messages,
+      signal: streamAbortController.signal,
       onThinking: (token) => {
         if (!assistantMsg._thinkingActive) {
           assistantMsg._thinkingActive = true;
@@ -439,19 +574,32 @@ async function streamAssistant(chat) {
         renderActiveChatUI();
       }
     });
+
+    assistantMsg._done = true;
+    renderActiveChatUI();
     if (chat.id !== TEMP_CHAT_ID) {
       await saveChat(db, chat);
       renderChatsUI();
     }
   } catch (err) {
-    showError(els.errorEl, err.message || 'Failed to reach Ollama.');
-    chat.messages.pop(); // remove assistant placeholder
-    if (chat.id !== TEMP_CHAT_ID) {
-      await saveChat(db, chat);
+    if (err?.name === 'AbortError') {
+      // user paused
+    } else {
+      showError(els.errorEl, err.message || 'Failed to reach Ollama.');
+      chat.messages.pop(); // remove assistant placeholder
+      if (chat.id !== TEMP_CHAT_ID) {
+        await saveChat(db, chat);
+      }
+      renderActiveChatUI();
     }
-    renderActiveChatUI();
   } finally {
     state.isStreaming = false;
     els.typingIndicator.classList.add('hidden');
+    stopTypingSpinnerFallback();
+    streamAbortController = null;
+    if (els.sendBtn) {
+      els.sendBtn.setAttribute('aria-label', 'Send');
+      els.sendBtn.innerHTML = '<span>➤</span>';
+    }
   }
 }
