@@ -15,6 +15,7 @@ export function createInitialState() {
     renamingId: null,
     chatQuery: '',
     trashQuery: '',
+    memoriesQuery: '',
     confirmAction: null,
     temporaryChatEnabled: false,
     tempChat: null,
@@ -58,7 +59,7 @@ export function loadUIState() {
 
 export function setSidebarSelection(state, next) {
   state.sidebarSelection = next;
-  if (next.kind === 'trash') {
+  if (next.kind === 'trash' || next.kind === 'memories') {
     state.pendingNew = false;
     state.renamingId = null;
   }

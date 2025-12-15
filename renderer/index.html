@@ -30,6 +30,17 @@
           </div>
         </div>
         <div id="chat-list" class="chat-list"></div>
+        <button id="memories-btn" class="button button-ghost full-width">
+          <span class="icon-text">
+            <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 7a3 3 0 0 1 3-3h7a3 3 0 0 1 3 3v11a2 2 0 0 1-2 2H7a3 3 0 0 1-3-3V7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+              <path d="M7 8h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M7 12h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M7 16h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            Memories
+          </span>
+        </button>
         <button id="trash-btn" class="button button-ghost full-width">
           <span class="icon-text">
             <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -44,6 +55,29 @@
         </button>
       </aside>
       <main class="chat-area">
+        <section id="memories-view" class="memories-view hidden">
+          <div class="memories-header">
+            <div class="memories-title">
+              <span class="icon-text">
+                <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M4 7a3 3 0 0 1 3-3h7a3 3 0 0 1 3 3v11a2 2 0 0 1-2 2H7a3 3 0 0 1-3-3V7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                  <path d="M7 8h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M7 12h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M7 16h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                Memories
+              </span>
+            </div>
+          </div>
+          <div class="memories-add">
+            <input id="memories-add-input" class="memories-add-input" type="text" placeholder="Add a new memory..." />
+            <button id="memories-add-btn" class="button button-ghost">Add</button>
+          </div>
+          <div class="memories-search">
+            <input id="memories-search-input" class="memories-search-input" type="text" placeholder="Search memories..." />
+          </div>
+          <div id="memories-list" class="memories-list"></div>
+        </section>
         <section id="trash-view" class="trash-view hidden">
           <div class="trash-header">
             <div class="trash-title">

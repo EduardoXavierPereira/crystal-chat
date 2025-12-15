@@ -14,6 +14,8 @@ export function attachUIBindings({
   abortStreaming,
   applySidebarSelection,
   togglePinnedOpen,
+  onMemoriesSearchInput,
+  onMemoriesAdd,
   onTrashSearchInput,
   onTrashRestoreAll,
   onTrashDeleteAll
@@ -99,6 +101,17 @@ export function attachUIBindings({
     }
   });
 
+  els.memoriesBtn?.addEventListener('click', () => {
+    const nextKind = state.sidebarSelection.kind === 'memories' ? 'chat' : 'memories';
+    if (nextKind === 'memories') {
+      applySidebarSelection({ kind: 'memories' });
+      if (els.memoriesSearchInput) els.memoriesSearchInput.focus();
+    } else {
+      applySidebarSelection({ kind: 'chat', id: null });
+      els.promptInput?.focus();
+    }
+  });
+
   els.pinnedBtn?.addEventListener('click', () => {
     togglePinnedOpen?.();
   });
@@ -106,6 +119,30 @@ export function attachUIBindings({
   els.trashSearchInput?.addEventListener('input', () => {
     state.trashQuery = (els.trashSearchInput.value || '').trim().toLowerCase();
     onTrashSearchInput?.();
+  });
+
+  els.memoriesSearchInput?.addEventListener('input', () => {
+    state.memoriesQuery = (els.memoriesSearchInput.value || '').trim().toLowerCase();
+    onMemoriesSearchInput?.();
+  });
+
+  const runAddMemory = async () => {
+    const v = (els.memoriesAddInput?.value || '').toString().trim();
+    if (!v) return;
+    els.memoriesAddInput.value = '';
+    await onMemoriesAdd?.(v);
+  };
+
+  els.memoriesAddBtn?.addEventListener('click', async (e) => {
+    e.preventDefault();
+    await runAddMemory();
+  });
+
+  els.memoriesAddInput?.addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      await runAddMemory();
+    }
   });
 
   els.trashRestoreAllBtn?.addEventListener('click', async () => {

@@ -31,6 +31,7 @@ import { createSetupController } from './setupController.js';
 import { createChatController } from './chatController.js';
 import { attachUIBindings } from './uiBindings.js';
 import { DEFAULT_EMBEDDING_MODEL } from './memories.js';
+import { createMemoriesActions } from './memoriesActions.js';
 
 const els = getEls();
 const state = createInitialState();
@@ -47,6 +48,8 @@ let modelDropdown = null;
 let trashActions = null;
 
 let pinnedActions = null;
+
+let memoriesActions = null;
 
 let chatSidebarController = null;
 
@@ -236,6 +239,16 @@ async function continueInitAfterSetup() {
     }
   });
 
+  memoriesActions = createMemoriesActions({
+    db,
+    els,
+    state,
+    getApiUrl: () => runtimeApiUrl,
+    embedText,
+    embeddingModel: DEFAULT_EMBEDDING_MODEL,
+    showError
+  });
+
   if (migrated.length > 0) {
     await Promise.all(migrated.map((c) => saveChat(db, c)));
   }
@@ -352,6 +365,8 @@ async function continueInitAfterSetup() {
     abortStreaming: () => streamingController?.abort(),
     applySidebarSelection: (sel) => chatSidebarController?.applySidebarSelection(sel),
     togglePinnedOpen: () => pinnedActions?.togglePinnedOpen(),
+    onMemoriesSearchInput: () => memoriesActions?.renderMemoriesUI(),
+    onMemoriesAdd: async (text) => memoriesActions?.addMemoryFromText(text),
     onTrashSearchInput: () => trashActions?.renderTrashUI(),
     onTrashRestoreAll: () => trashActions?.restoreAllTrashedChats(),
     onTrashDeleteAll: () => trashActions?.requestDeleteAllTrashed()
@@ -415,6 +430,12 @@ function renderActiveChatUI() {
 
   if (state.sidebarSelection.kind === 'trash') {
     trashActions?.renderTrashUI().catch(() => {
+      // ignore
+    });
+  }
+
+  if (state.sidebarSelection.kind === 'memories') {
+    memoriesActions?.renderMemoriesUI().catch(() => {
       // ignore
     });
   }

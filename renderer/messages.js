@@ -357,12 +357,15 @@ export function renderActiveChat({
   const chat = activeChatId === tempChatId ? tempChat : state.chats.find((c) => c.id === activeChatId);
 
   if (els.trashViewEl) els.trashViewEl.classList.toggle('hidden', state.sidebarSelection.kind !== 'trash');
+  if (els.memoriesViewEl) els.memoriesViewEl.classList.toggle('hidden', state.sidebarSelection.kind !== 'memories');
   const inTrash = state.sidebarSelection.kind === 'trash';
-  if (els.messagesEl) els.messagesEl.classList.toggle('hidden', inTrash);
-  if (els.promptForm) els.promptForm.classList.toggle('hidden', inTrash);
-  if (els.errorEl) els.errorEl.classList.toggle('hidden', inTrash || els.errorEl.textContent === '');
+  const inMemories = state.sidebarSelection.kind === 'memories';
+  const hideChat = inTrash || inMemories;
+  if (els.messagesEl) els.messagesEl.classList.toggle('hidden', hideChat);
+  if (els.promptForm) els.promptForm.classList.toggle('hidden', hideChat);
+  if (els.errorEl) els.errorEl.classList.toggle('hidden', hideChat || els.errorEl.textContent === '');
 
-  if (inTrash) return;
+  if (hideChat) return;
 
   let messagesScrollTop = 0;
   try {

@@ -374,8 +374,28 @@ body {
   scrollbar-gutter: stable both-edges;
 }
 
-#trash-btn {
+#memories-btn {
   margin-top: auto;
+}
+
+#memories-btn.button-ghost {
+  border-color: transparent;
+  background: transparent;
+}
+
+#memories-btn.button-ghost:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+#memories-btn.button-ghost.active {
+  background: rgba(127, 201, 255, 0.12);
+  border-color: rgba(127, 201, 255, 0.4);
+}
+
+#memories-btn.button-ghost.active:hover {
+  background: rgba(127, 201, 255, 0.18);
+  border-color: rgba(127, 201, 255, 0.55);
 }
 
 #trash-btn.button-ghost {
@@ -1227,6 +1247,124 @@ body {
   min-height: 0;
   flex: 1;
   padding: 18px 18px 18px 18px;
+}
+
+.memories-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  flex: 1;
+  padding: 18px 18px 18px 18px;
+}
+
+.memories-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.memories-title {
+  font-size: 1.1rem;
+  font-weight: 650;
+}
+
+.memories-add {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.memories-add-input {
+  flex: 1;
+  width: 100%;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  font-family: var(--sans);
+}
+
+.memories-add-input:focus {
+  outline: 1px solid rgba(77, 163, 255, 0.4);
+}
+
+.memories-search {
+  display: flex;
+  align-items: center;
+}
+
+.memories-search-input {
+  width: 100%;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  font-family: var(--sans);
+}
+
+.memories-search-input:focus {
+  outline: 1px solid rgba(77, 163, 255, 0.4);
+}
+
+.memories-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  min-height: 0;
+  padding-bottom: 18px;
+}
+
+.memories-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.memories-text {
+  flex: 1;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
+.memories-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.memories-delete {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  border-radius: var(--radius-ml);
+  padding: 8px 10px;
+  cursor: pointer;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.memories-delete:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.memories-empty {
+  color: var(--muted);
+  text-align: center;
+  padding: 28px 12px;
+  margin-top: 18px;
 }
 
 
