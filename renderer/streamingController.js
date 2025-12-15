@@ -85,10 +85,13 @@ export function createStreamingController({
       role: 'assistant',
       content: '',
       thinking: '',
+      tokens: null,
       _done: false,
       _thinkingActive: false,
       _thinkingOpen: false,
-      _thinkingUserToggled: false
+      _thinkingUserToggled: false,
+      _retrievedMemories: null,
+      _retrievedMemoriesOpen: false
     };
 
     chat.messages.push(assistantMsg);
@@ -138,6 +141,8 @@ export function createStreamingController({
             combinedSystem = `${combinedSystem}\n\n${rendered.block}`;
           }
 
+          assistantMsg._retrievedMemories = Array.isArray(rendered.memories) ? rendered.memories : [];
+
           if (chat.id !== tempChatId) {
             const memoryText = formatUserPromptMemory({ prompt, now: Date.now() });
             await addMemory(db, { text: memoryText, embedding: queryEmbedding, createdAt: Date.now() });
@@ -182,6 +187,17 @@ export function createStreamingController({
             }
             assistantMsg.content += token;
             updateStreamingMessage();
+          },
+          onFinal: (finalJson) => {
+            const promptEval = Number.isFinite(finalJson?.prompt_eval_count) ? finalJson.prompt_eval_count : null;
+            const evalCount = Number.isFinite(finalJson?.eval_count) ? finalJson.eval_count : null;
+            if (promptEval !== null || evalCount !== null) {
+              assistantMsg.tokens = {
+                prompt: promptEval,
+                completion: evalCount,
+                total: (promptEval || 0) + (evalCount || 0)
+              };
+            }
           }
         });
       };
@@ -212,6 +228,22 @@ export function createStreamingController({
     } catch (err) {
       if (err?.name === 'AbortError') {
         // user paused
+        assistantMsg._done = true;
+        if (assistantMsg._thinkingActive) {
+          assistantMsg._thinkingActive = false;
+          if (!assistantMsg._thinkingUserToggled) {
+            assistantMsg._thinkingOpen = false;
+          }
+        }
+        renderActiveChatUI();
+        if (chat.id !== tempChatId) {
+          try {
+            await saveChat(db, chat);
+            renderChatsUI();
+          } catch {
+            // ignore
+          }
+        }
       } else {
         showError(els.errorEl, err.message || 'Failed to reach Ollama.');
         chat.messages.pop();

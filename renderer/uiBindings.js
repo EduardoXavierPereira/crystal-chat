@@ -1,25 +1,61 @@
 export function attachUIBindings({
   els,
   state,
+  tempChatId,
   autosizePrompt,
   clampNumber,
   saveUIState,
   closeConfirm,
   closePromptToolsPopover,
   togglePromptToolsPopover,
+  closeChatHeaderToolsPopover,
+  toggleChatHeaderToolsPopover,
   updateSendButtonEnabled,
   setRandomnessSliderFill,
+  setTextSizeSliderFill,
+  applyChatTextSize,
   renderChatsUI,
   handleSubmit,
   abortStreaming,
   applySidebarSelection,
   togglePinnedOpen,
+  togglePinnedChat,
   onMemoriesSearchInput,
   onMemoriesAdd,
   onTrashSearchInput,
   onTrashRestoreAll,
   onTrashDeleteAll
 }) {
+  const bindingsAbort = new AbortController();
+
+  window.addEventListener(
+    'cc:openMemories',
+    (e) => {
+      const query = (e?.detail?.query || '').toString().trim();
+      applySidebarSelection({ kind: 'memories' });
+      if (els.memoriesSearchInput) {
+        els.memoriesSearchInput.value = query;
+        els.memoriesSearchInput.focus();
+      }
+      state.memoriesQuery = query.toLowerCase();
+      onMemoriesSearchInput?.();
+    },
+    { signal: bindingsAbort.signal }
+  );
+
+  window.addEventListener(
+    'cc:togglePinnedChat',
+    async (e) => {
+      const id = e?.detail?.id;
+      if (typeof id !== 'string' || !id) return;
+      if (id === tempChatId) return;
+      await togglePinnedChat?.(id);
+    },
+    { signal: bindingsAbort.signal }
+  );
+
+  window.addEventListener('beforeunload', () => bindingsAbort.abort(), { signal: bindingsAbort.signal });
+
   els.promptForm.addEventListener('submit', handleSubmit);
   els.promptInput.addEventListener('input', () => {
     autosizePrompt(els.promptInput);
@@ -45,6 +81,12 @@ export function attachUIBindings({
     togglePromptToolsPopover();
   });
 
+  els.chatHeaderToolsBtn?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleChatHeaderToolsPopover?.();
+  });
+
   document.addEventListener('click', (e) => {
     if (!els.promptToolsPopover || els.promptToolsPopover.classList.contains('hidden')) return;
     const t = e.target;
@@ -54,9 +96,19 @@ export function attachUIBindings({
     closePromptToolsPopover();
   });
 
+  document.addEventListener('click', (e) => {
+    if (!els.chatHeaderToolsPopover || els.chatHeaderToolsPopover.classList.contains('hidden')) return;
+    const t = e.target;
+    if (!(t instanceof Node)) return;
+    if (els.chatHeaderToolsPopover.contains(t)) return;
+    if (els.chatHeaderToolsBtn && els.chatHeaderToolsBtn.contains(t)) return;
+    closeChatHeaderToolsPopover?.();
+  });
+
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       closePromptToolsPopover();
+      closeChatHeaderToolsPopover?.();
     }
   });
 
@@ -65,6 +117,16 @@ export function attachUIBindings({
       state.creativity = clampNumber(els.creativitySlider.value, 0, 2, 1);
       if (els.creativityValue) els.creativityValue.textContent = state.creativity.toFixed(2);
       setRandomnessSliderFill();
+      saveUIState(state);
+    });
+  }
+
+  if (els.textSizeSlider) {
+    els.textSizeSlider.addEventListener('input', () => {
+      state.textSize = clampNumber(els.textSizeSlider.value, 0.85, 1.25, 1);
+      if (els.textSizeValue) els.textSizeValue.textContent = state.textSize.toFixed(2);
+      setTextSizeSliderFill?.();
+      applyChatTextSize?.();
       saveUIState(state);
     });
   }

@@ -17,6 +17,42 @@ function cosineSimilarity(a, b) {
   return dot / denom;
 }
 
+function parseLegacyMemoryText(text) {
+  const t = (text || '').toString();
+  const m = t.match(/^User said at\s+([^:]+):\s*([\s\S]*)$/);
+  if (!m) return null;
+  const iso = (m[1] || '').trim();
+  const body = (m[2] || '').trim();
+  const ms = Date.parse(iso);
+  return {
+    createdAt: Number.isFinite(ms) ? ms : null,
+    text: body
+  };
+}
+
+export function formatMemoryTimestamp(ts) {
+  const ms = typeof ts === 'string' ? Date.parse(ts) : Number(ts);
+  if (!Number.isFinite(ms) || ms <= 0) return '';
+  const d = new Date(ms);
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: '2-digit',
+    hour: 'numeric',
+    minute: '2-digit'
+  }).format(d);
+}
+
+export function getMemoryDisplayParts(m) {
+  const legacy = parseLegacyMemoryText(m?.text);
+  const text = (legacy?.text ?? m?.text ?? '').toString().trim();
+  const createdAt = legacy?.createdAt ?? m?.createdAt ?? null;
+  return {
+    text,
+    createdAt,
+    meta: createdAt ? formatMemoryTimestamp(createdAt) : ''
+  };
+}
+
 function normalizeTextForMemory(s) {
   const t = (s || '').toString().trim();
   if (!t) return '';
@@ -24,9 +60,8 @@ function normalizeTextForMemory(s) {
 }
 
 export function formatUserPromptMemory({ prompt, now }) {
-  const ts = new Date(now || Date.now()).toISOString();
   const clipped = normalizeTextForMemory(prompt);
-  return `User said at ${ts}: ${clipped}`;
+  return clipped;
 }
 
 export function addMemory(db, { text, embedding, createdAt }) {
@@ -78,16 +113,19 @@ export async function findSimilarMemories(db, { queryEmbedding, topK = 5 }) {
 export function renderMemoriesBlock(memories, { maxChars = Infinity } = {}) {
   const header = 'Relevant memories (verbatim user prompts):\n';
   const budget = Number.isFinite(maxChars) ? Math.max(0, maxChars) : Infinity;
-  if (!budget) return { block: '', usedChars: 0, count: 0 };
+  if (!budget) return { block: '', usedChars: 0, count: 0, memories: [] };
 
   // Budget applies to the entire block.
   let used = 0;
   let count = 0;
   let body = '';
+  const selected = [];
 
   const items = (memories || []).filter((m) => m && m.text);
   for (const m of items) {
-    const line = `- ${m.text}`;
+    const parts = getMemoryDisplayParts(m);
+    const meta = parts.meta ? `[${parts.meta}] ` : '';
+    const line = `- ${meta}${parts.text}`;
     const prefix = body ? '\n' : '';
     const nextBody = `${body}${prefix}${line}`;
     const nextBlock = `${header}${nextBody}`;
@@ -100,8 +138,9 @@ export function renderMemoriesBlock(memories, { maxChars = Infinity } = {}) {
     body = nextBody;
     count += 1;
     used = nextBlock.length;
+    selected.push(m);
   }
 
-  if (!count) return { block: '', usedChars: 0, count: 0 };
-  return { block: `${header}${body}`, usedChars: used, count };
+  if (!count) return { block: '', usedChars: 0, count, memories: [] };
+  return { block: `${header}${body}`, usedChars: used, count, memories: selected };
 }

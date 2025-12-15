@@ -1,4 +1,4 @@
-export async function streamChat({ apiUrl, model, temperature, messages, onToken, onThinking, signal }) {
+export async function streamChat({ apiUrl, model, temperature, messages, onToken, onThinking, onFinal, signal }) {
   const res = await fetch(apiUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -65,7 +65,10 @@ export async function streamChat({ apiUrl, model, temperature, messages, onToken
       if (json.message && json.message.content) {
         onToken?.(json.message.content);
       }
-      if (json.done) return;
+      if (json.done) {
+        onFinal?.(json);
+        return;
+      }
     }
   }
 }

@@ -133,6 +133,46 @@
             </div>
           </div>
         </div>
+        <header id="chat-header" class="chat-header">
+          <div class="chat-header-left">
+            <div id="chat-header-title" class="chat-header-title">New chat</div>
+            <div id="chat-header-tokens" class="chat-header-meta">0 tokens</div>
+          </div>
+          <div class="chat-header-right">
+            <button
+              id="chat-header-tools-btn"
+              type="button"
+              class="chat-header-tools-btn"
+              aria-label="Chat controls"
+              aria-haspopup="dialog"
+              aria-expanded="false"
+            >
+              <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M12 5.5C12 6.88071 10.8807 8 9.5 8C8.11929 8 7 6.88071 7 5.5M12 5.5C12 4.11929 10.8807 3 9.5 3C8.11929 3 7 4.11929 7 5.5M12 5.5H21M7 5.5H3M19 12C19 13.3807 17.8807 14.5 16.5 14.5C15.1193 14.5 14 13.3807 14 12M19 12C19 10.6193 17.8807 9.5 16.5 9.5C15.1193 9.5 14 10.6193 14 12M19 12H21M14 12H3M10 18.5C10 19.8807 8.88071 21 7.5 21C6.11929 21 5 19.8807 5 18.5M10 18.5C10 17.1193 8.88071 16 7.5 16C6.11929 16 5 17.1193 5 18.5M10 18.5H21M5 18.5H3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <div id="chat-header-tools-popover" class="chat-header-tools-popover hidden" role="dialog" aria-label="Chat controls">
+              <div class="prompt-tools-row">
+                <label class="prompt-tools-label" for="text-size-slider">Text size</label>
+                <div class="prompt-tools-slider-wrap">
+                  <input id="text-size-slider" class="prompt-tools-slider" type="range" min="0.85" max="1.25" step="0.01" />
+                  <div id="text-size-value" class="prompt-tools-value">1.00</div>
+                </div>
+              </div>
+              <div class="prompt-tools-row">
+                <div class="prompt-tools-label">
+                  <span class="pin-chat-label-wrap">
+                    <svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                      <path d="M12 17.27l-5.18 2.73 1-5.85L3.64 9.24l5.9-.86L12 3l2.46 5.38 5.9.86-4.18 4.91 1 5.85L12 17.27Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                    </svg>
+                    <span>Pin chat</span>
+                  </span>
+                </div>
+                <div id="pin-chat-toggle" class="pin-chat-toggle"></div>
+              </div>
+            </div>
+          </div>
+        </header>
         <section id="messages" class="messages">
           <div id="typing-indicator" class="typing chat-typing hidden">
             <div class="spinner"></div>

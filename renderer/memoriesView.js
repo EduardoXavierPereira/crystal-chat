@@ -23,10 +23,28 @@ export function renderMemories({ els, memories, query, onDelete } = {}) {
       const row = document.createElement('div');
       row.className = 'memories-item';
 
-      const text = document.createElement('div');
-      text.className = 'memories-text';
-      text.textContent = (m?.text || '').toString();
-      row.appendChild(text);
+      const content = document.createElement('div');
+      content.className = 'memories-content';
+      row.appendChild(content);
+
+      // Lazy import to avoid coupling this tiny view module too tightly.
+      // (Also keeps initial renderer boot faster.)
+      // eslint-disable-next-line no-void
+      void import('./memories.js').then(({ getMemoryDisplayParts }) => {
+        const parts = getMemoryDisplayParts?.(m) || { text: (m?.text || '').toString(), meta: '' };
+
+        if (parts.meta) {
+          const meta = document.createElement('div');
+          meta.className = 'memories-meta';
+          meta.textContent = parts.meta;
+          content.appendChild(meta);
+        }
+
+        const text = document.createElement('div');
+        text.className = 'memories-text';
+        text.textContent = (parts.text || '').toString();
+        content.appendChild(text);
+      });
 
       const actions = document.createElement('div');
       actions.className = 'memories-item-actions';

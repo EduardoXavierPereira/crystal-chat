@@ -95,11 +95,24 @@ function closePromptToolsPopover() {
   els.promptToolsBtn.setAttribute('aria-expanded', 'false');
 }
 
+function closeChatHeaderToolsPopover() {
+  if (!els.chatHeaderToolsPopover || !els.chatHeaderToolsBtn) return;
+  els.chatHeaderToolsPopover.classList.add('hidden');
+  els.chatHeaderToolsBtn.setAttribute('aria-expanded', 'false');
+}
+
 function togglePromptToolsPopover() {
   if (!els.promptToolsPopover || !els.promptToolsBtn) return;
   const isOpen = !els.promptToolsPopover.classList.contains('hidden');
   els.promptToolsPopover.classList.toggle('hidden', isOpen);
   els.promptToolsBtn.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+}
+
+function toggleChatHeaderToolsPopover() {
+  if (!els.chatHeaderToolsPopover || !els.chatHeaderToolsBtn) return;
+  const isOpen = !els.chatHeaderToolsPopover.classList.contains('hidden');
+  els.chatHeaderToolsPopover.classList.toggle('hidden', isOpen);
+  els.chatHeaderToolsBtn.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
 }
 
 function updateStatusText() {
@@ -135,6 +148,21 @@ function setRandomnessSliderFill() {
   const v = clampNumber(els.creativitySlider.value, min, max, 1);
   const pct = max > min ? ((v - min) / (max - min)) * 100 : 0;
   els.creativitySlider.style.setProperty('--range-pct', `${pct}%`);
+}
+
+function setTextSizeSliderFill() {
+  if (!els.textSizeSlider) return;
+  const min = clampNumber(els.textSizeSlider.min, 0.5, 2, 1);
+  const max = clampNumber(els.textSizeSlider.max, 0.5, 2, 1);
+  const v = clampNumber(els.textSizeSlider.value, min, max, 1);
+  const pct = max > min ? ((v - min) / (max - min)) * 100 : 0;
+  els.textSizeSlider.style.setProperty('--range-pct', `${pct}%`);
+}
+
+function applyChatTextSize() {
+  if (!els.messagesEl) return;
+  const v = Number.isFinite(state.textSize) ? state.textSize : 1;
+  els.messagesEl.style.setProperty('--chat-text-scale', String(v));
 }
 
 function showSetupModal(message) {
@@ -197,6 +225,7 @@ async function continueInitAfterSetup() {
   state.chatQuery = (ui?.chatQuery || '').toString();
   state.selectedModel = (ui?.selectedModel || state.selectedModel || MODEL).toString();
   state.creativity = clampNumber(ui?.creativity ?? ui?.randomness, 0, 2, state.creativity);
+  state.textSize = clampNumber(ui?.textSize, 0.85, 1.25, state.textSize);
   state.systemPrompt = (ui?.systemPrompt ?? state.systemPrompt ?? '').toString();
 
   if (els.modelDropdownEl) {
@@ -225,8 +254,12 @@ async function continueInitAfterSetup() {
 
   if (els.creativitySlider) els.creativitySlider.value = String(state.creativity);
   if (els.creativityValue) els.creativityValue.textContent = state.creativity.toFixed(2);
+  if (els.textSizeSlider) els.textSizeSlider.value = String(state.textSize);
+  if (els.textSizeValue) els.textSizeValue.textContent = state.textSize.toFixed(2);
   if (els.systemPromptInput) els.systemPromptInput.value = state.systemPrompt;
   setRandomnessSliderFill();
+  setTextSizeSliderFill();
+  applyChatTextSize();
   updateStatusText();
   updatePromptPlaceholder();
 
@@ -353,19 +386,25 @@ async function continueInitAfterSetup() {
   attachUIBindings({
     els,
     state,
+    tempChatId: TEMP_CHAT_ID,
     autosizePrompt,
     clampNumber,
     saveUIState,
     closeConfirm,
     closePromptToolsPopover,
     togglePromptToolsPopover,
+    closeChatHeaderToolsPopover,
+    toggleChatHeaderToolsPopover,
     updateSendButtonEnabled,
     setRandomnessSliderFill,
+    setTextSizeSliderFill,
+    applyChatTextSize,
     renderChatsUI,
     handleSubmit: (e) => chatController?.handleSubmit?.(e),
     abortStreaming: () => streamingController?.abort(),
     applySidebarSelection: (sel) => chatSidebarController?.applySidebarSelection(sel),
     togglePinnedOpen: () => pinnedActions?.togglePinnedOpen(),
+    togglePinnedChat: async (id) => pinnedActions?.togglePinned(id),
     onMemoriesSearchInput: () => memoriesActions?.renderMemoriesUI(),
     onMemoriesAdd: async (text) => memoriesActions?.addMemoryFromText(text),
     onTrashSearchInput: () => trashActions?.renderTrashUI(),

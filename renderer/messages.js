@@ -1,4 +1,6 @@
 import { applySuggestionToPrompt } from './newchat.js';
+import { chatTitleFromMessages } from './sidebar.js';
+import { createToggle } from './toggle.js';
 
  function sanitizeAssistantHtml(html) {
    const raw = (html || '').toString();
@@ -124,11 +126,14 @@ export function updateRenderedMessage({ els, msg, messageIndex } = {}) {
 
   if (!shouldHaveThinking) {
     if (thinkingWrap) thinkingWrap.remove();
-    return true;
   }
 
   let wrap = thinkingWrap;
   if (!wrap) {
+    if (!shouldHaveThinking) wrap = null;
+  }
+
+  if (!wrap && shouldHaveThinking) {
     wrap = document.createElement('div');
     wrap.className = 'thinking';
 
@@ -195,6 +200,100 @@ export function updateRenderedMessage({ els, msg, messageIndex } = {}) {
   if (body) {
     body.textContent = msg.thinking || '';
     body.classList.toggle('hidden', !msg._thinkingOpen);
+  }
+
+  const memoriesWrap = root.querySelector('.memories-retrieved');
+  const retrieved = msg.role === 'assistant' && Array.isArray(msg._retrievedMemories) ? msg._retrievedMemories : null;
+  const shouldHaveRetrieved = !!retrieved && retrieved.length > 0;
+
+  if (!shouldHaveRetrieved) {
+    if (memoriesWrap) memoriesWrap.remove();
+    return true;
+  }
+
+  let mwrap = memoriesWrap;
+  if (!mwrap) {
+    mwrap = document.createElement('div');
+    mwrap.className = 'memories-retrieved';
+
+    const mtoggle = document.createElement('button');
+    mtoggle.type = 'button';
+    mtoggle.className = 'thinking-toggle';
+
+    const mtoggleText = document.createElement('span');
+    mtoggleText.className = 'thinking-toggle-text';
+    mtoggleText.innerHTML =
+      '<span class="thinking-toggle-icon" aria-hidden="true">'
+      + '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" xmlns="http://www.w3.org/2000/svg">'
+      + '<path d="M4 7a3 3 0 0 1 3-3h7a3 3 0 0 1 3 3v11a2 2 0 0 1-2 2H7a3 3 0 0 1-3-3V7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>'
+      + '<path d="M7 8h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
+      + '<path d="M7 12h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
+      + '<path d="M7 16h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
+      + '</svg>'
+      + '</span>'
+      + '<span class="thinking-toggle-label">Memories retrieved</span>';
+
+    const mchevron = document.createElement('span');
+    mchevron.className = 'thinking-chevron';
+    mchevron.setAttribute('aria-hidden', 'true');
+    mchevron.textContent = '▸';
+
+    const mbody = document.createElement('div');
+    mbody.className = 'thinking-body';
+    mbody.dataset.messageIndex = String(messageIndex);
+    mbody.classList.toggle('hidden', !msg._retrievedMemoriesOpen);
+
+    const savedScrollTop = Number.isFinite(msg._retrievedMemoriesScrollTop) ? msg._retrievedMemoriesScrollTop : 0;
+    mbody.scrollTop = Math.max(0, savedScrollTop);
+    mbody.onscroll = () => {
+      if (!msg._retrievedMemoriesOpen) return;
+      msg._retrievedMemoriesScrollTop = mbody.scrollTop;
+    };
+
+    mtoggle.onclick = () => {
+      msg._retrievedMemoriesOpen = !msg._retrievedMemoriesOpen;
+      mbody.classList.toggle('hidden', !msg._retrievedMemoriesOpen);
+      mtoggle.classList.toggle('open', !!msg._retrievedMemoriesOpen);
+    };
+
+    mtoggle.classList.toggle('open', !!msg._retrievedMemoriesOpen);
+    mtoggle.appendChild(mtoggleText);
+    mtoggle.appendChild(mchevron);
+    mwrap.appendChild(mtoggle);
+    mwrap.appendChild(mbody);
+
+    const insertAfter = wrap || root.querySelector('.message-header');
+    if (insertAfter && insertAfter.nextSibling) {
+      root.insertBefore(mwrap, insertAfter.nextSibling);
+    } else {
+      root.insertBefore(mwrap, root.firstChild);
+    }
+  }
+
+  const mbody = mwrap.querySelector('.thinking-body');
+  const mtoggle = mwrap.querySelector('.thinking-toggle');
+  if (mtoggle) mtoggle.classList.toggle('open', !!msg._retrievedMemoriesOpen);
+  if (mbody) {
+    mbody.classList.toggle('hidden', !msg._retrievedMemoriesOpen);
+    mbody.innerHTML = '';
+    void import('./memories.js').then(({ getMemoryDisplayParts }) => {
+      const items = Array.isArray(retrieved) ? retrieved : [];
+      items.forEach((mem) => {
+        const parts = getMemoryDisplayParts?.(mem) || { text: (mem?.text || '').toString(), meta: '' };
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'memories-retrieved-item';
+        const ts = parts.meta ? `${parts.meta} — ` : '';
+        btn.textContent = `${ts}${(parts.text || '').toString()}`;
+        btn.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const ev = new CustomEvent('cc:openMemories', { detail: { query: (parts.text || '').toString() } });
+          window.dispatchEvent(ev);
+        };
+        mbody.appendChild(btn);
+      });
+    });
   }
 
   return true;
@@ -289,6 +388,78 @@ export function renderMessageElement(msg, { onCopy, onRegenerate, onDeleteUserMe
   }
 
   div.appendChild(header);
+  if (msg.role === 'assistant' && Array.isArray(msg._retrievedMemories) && msg._retrievedMemories.length > 0) {
+    const memWrap = document.createElement('div');
+    memWrap.className = 'memories-retrieved';
+
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'thinking-toggle';
+
+    const toggleText = document.createElement('span');
+    toggleText.className = 'thinking-toggle-text';
+    toggleText.innerHTML =
+      '<span class="thinking-toggle-icon" aria-hidden="true">'
+      + '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" xmlns="http://www.w3.org/2000/svg">'
+      + '<path d="M4 7a3 3 0 0 1 3-3h7a3 3 0 0 1 3 3v11a2 2 0 0 1-2 2H7a3 3 0 0 1-3-3V7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>'
+      + '<path d="M7 8h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
+      + '<path d="M7 12h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
+      + '<path d="M7 16h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
+      + '</svg>'
+      + '</span>'
+      + '<span class="thinking-toggle-label">Memories retrieved</span>';
+
+    const chevron = document.createElement('span');
+    chevron.className = 'thinking-chevron';
+    chevron.setAttribute('aria-hidden', 'true');
+    chevron.textContent = '▸';
+
+    const body = document.createElement('div');
+    body.className = 'thinking-body';
+    body.classList.toggle('hidden', !msg._retrievedMemoriesOpen);
+    if (typeof messageIndex === 'number') body.dataset.messageIndex = String(messageIndex);
+
+    const savedScrollTop = Number.isFinite(msg._retrievedMemoriesScrollTop) ? msg._retrievedMemoriesScrollTop : 0;
+    body.scrollTop = Math.max(0, savedScrollTop);
+    body.onscroll = () => {
+      if (!msg._retrievedMemoriesOpen) return;
+      msg._retrievedMemoriesScrollTop = body.scrollTop;
+    };
+
+    toggle.onclick = () => {
+      msg._retrievedMemoriesOpen = !msg._retrievedMemoriesOpen;
+      body.classList.toggle('hidden', !msg._retrievedMemoriesOpen);
+      toggle.classList.toggle('open', !!msg._retrievedMemoriesOpen);
+    };
+
+    toggle.classList.toggle('open', !!msg._retrievedMemoriesOpen);
+    toggle.appendChild(toggleText);
+    toggle.appendChild(chevron);
+
+    memWrap.appendChild(toggle);
+    memWrap.appendChild(body);
+    div.appendChild(memWrap);
+
+    void import('./memories.js').then(({ getMemoryDisplayParts }) => {
+      const items = Array.isArray(msg._retrievedMemories) ? msg._retrievedMemories : [];
+      items.forEach((mem) => {
+        const parts = getMemoryDisplayParts?.(mem) || { text: (mem?.text || '').toString(), meta: '' };
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'memories-retrieved-item';
+        const ts = parts.meta ? `${parts.meta} — ` : '';
+        btn.textContent = `${ts}${(parts.text || '').toString()}`;
+        btn.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const ev = new CustomEvent('cc:openMemories', { detail: { query: (parts.text || '').toString() } });
+          window.dispatchEvent(ev);
+        };
+        body.appendChild(btn);
+      });
+    });
+  }
+
   if (msg.role === 'assistant' && (msg.thinking || msg._thinkingActive)) {
     const thinkingWrap = document.createElement('div');
     thinkingWrap.className = 'thinking';
@@ -301,7 +472,7 @@ export function renderMessageElement(msg, { onCopy, onRegenerate, onDeleteUserMe
     toggleText.innerHTML =
       '<span class="thinking-toggle-icon" aria-hidden="true">'
       + '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" xmlns="http://www.w3.org/2000/svg">'
-      + '<path d="M10 16.584V18.9996C10 20.1042 10.8954 20.9996 12 20.9996C13.1046 20.9996 14 20.1042 14 18.9996L14 16.584M12 3V4M18.3643 5.63574L17.6572 6.34285M5.63574 5.63574L6.34285 6.34285M4 12H3M21 12H20M17 12C17 14.7614 14.7614 17 12 17C9.23858 17 7 14.7614 7 12C7 9.23858 9.23858 7 12 7C14.7614 7 17 9.23858 17 12Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
+      + '<path d="M10 16.584V18.9996C10 20.1042 10.8954 20.9996 12 20.9996C13.1046 20.9996 14 20.1042 14 18.9996L14 16.584M12 3V4M18.3643 5.63574L17.6572 6.34285M5.63574 5.63574L6.34285 6.34285M4 12H3M21 12H20M17 12C17 14.7614 14.7614 17 12 17C9.23858 17 7 14.7614 7 12C7 9.23858 9 7 12 7C14.7614 7 17 9.23858 17 12Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
       + '</svg>'
       + '</span>'
       + `<span class="thinking-toggle-label">${msg._thinkingActive ? 'Thinking…' : 'Thinking'}</span>`;
@@ -399,11 +570,62 @@ export function renderActiveChat({
   const inTrash = state.sidebarSelection.kind === 'trash';
   const inMemories = state.sidebarSelection.kind === 'memories';
   const hideChat = inTrash || inMemories;
+  if (els.chatHeaderEl) els.chatHeaderEl.classList.toggle('hidden', hideChat);
   if (els.messagesEl) els.messagesEl.classList.toggle('hidden', hideChat);
   if (els.promptForm) els.promptForm.classList.toggle('hidden', hideChat);
   if (els.errorEl) els.errorEl.classList.toggle('hidden', hideChat || els.errorEl.textContent === '');
 
   if (hideChat) return;
+
+  if (els.chatHeaderTitleEl) {
+    els.chatHeaderTitleEl.textContent = chat ? chatTitleFromMessages(chat) : 'New chat';
+  }
+
+  if (els.chatHeaderTokensEl) {
+    let totalChars = 0;
+    if (chat?.messages) {
+      for (const m of chat.messages) {
+        if (!m) continue;
+        const c = (m.content || '').toString();
+        const th = (m.thinking || '').toString();
+        totalChars += c.length + th.length;
+      }
+    }
+    const estTokens = Math.max(0, Math.ceil(totalChars / 4));
+    els.chatHeaderTokensEl.textContent = `${estTokens} tokens`;
+  }
+
+  if (els.pinChatToggleEl) {
+    const isTemp = !!chat && chat.id === tempChatId;
+    const pinned = !!(chat && (chat.pinnedAt || chat.favoriteAt));
+    els.pinChatToggleEl.innerHTML = '';
+    const t = createToggle({
+      id: 'pin-chat-toggle-input',
+      text: 'Pin chat',
+      checked: pinned,
+      disabled: !chat || isTemp,
+      className: '',
+      switchOnRight: false,
+      showText: false,
+      onChange: () => {
+        // actual persistence is handled by the click handler bound in uiBindings
+      }
+    });
+    // Use click on the label (not change) so we can keep persistence in one place.
+    t.el.addEventListener('click', (e) => {
+      // Allow checkbox toggle UI, but don't let it double toggle
+      e.preventDefault();
+      e.stopPropagation();
+      if (t.input.disabled) return;
+      t.setChecked(!t.input.checked);
+      const id = state.sidebarSelection.kind === 'chat' ? state.sidebarSelection.id : null;
+      if (!id || id === tempChatId) return;
+      // Fire a synthetic event that uiBindings listens to (custom)
+      const ev = new CustomEvent('cc:togglePinnedChat', { detail: { id } });
+      window.dispatchEvent(ev);
+    });
+    els.pinChatToggleEl.appendChild(t.el);
+  }
 
   let messagesScrollTop = 0;
   try {
@@ -526,24 +748,18 @@ export function renderActiveChat({
     main.appendChild(swap);
     layout.appendChild(main);
 
-    const toggle = document.createElement('label');
-    toggle.className = 'temp-chat-toggle';
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.checked = !!state.temporaryChatEnabled;
-    checkbox.onchange = () => {
-      state.temporaryChatEnabled = checkbox.checked;
-      animateSwap(!!state.temporaryChatEnabled);
-    };
-    const knob = document.createElement('span');
-    knob.className = 'temp-chat-switch';
-    const text = document.createElement('span');
-    text.className = 'temp-chat-toggle-text';
-    text.textContent = 'Temporary Chat';
-    toggle.appendChild(checkbox);
-    toggle.appendChild(knob);
-    toggle.appendChild(text);
-    layout.appendChild(toggle);
+    const toggle = createToggle({
+      id: 'temporary-chat-toggle',
+      text: 'Temporary Chat',
+      checked: !!state.temporaryChatEnabled,
+      disabled: false,
+      className: 'temp-chat-toggle',
+      onChange: (v) => {
+        state.temporaryChatEnabled = !!v;
+        animateSwap(!!state.temporaryChatEnabled);
+      }
+    });
+    layout.appendChild(toggle.el);
 
     els.messagesEl.appendChild(layout);
     els.messagesEl.appendChild(typingIndicator);

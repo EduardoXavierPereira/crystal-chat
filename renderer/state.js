@@ -22,6 +22,7 @@ export function createInitialState() {
     pinnedOpen: false,
     selectedModel: MODEL,
     creativity: 1,
+    textSize: 1,
     systemPrompt: DEFAULT_SYSTEM_PROMPT,
     sidebarSelection: { kind: 'chat', id: null }
   };
@@ -35,6 +36,7 @@ export function saveUIState(state) {
       selectedModel: (state.selectedModel || MODEL).toString(),
       creativity: Number.isFinite(state.creativity) ? state.creativity : 1,
       randomness: Number.isFinite(state.creativity) ? state.creativity : 1,
+      textSize: Number.isFinite(state.textSize) ? state.textSize : 1,
       systemPrompt: (state.systemPrompt || '').toString(),
       sidebarSelection:
         state.sidebarSelection.kind === 'chat' && state.sidebarSelection.id === TEMP_CHAT_ID
