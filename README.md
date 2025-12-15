@@ -20,6 +20,8 @@ Crystal Chat is an Electron app. The renderer calls the local Ollama Chat API:
 
 By default it uses the model configured in `renderer/state.js` (currently `qwen3:4b`).
 
+During setup, the app also installs an Ollama embeddings model (`embeddinggemma`) to power local prompt-memory retrieval.
+
 ## Requirements
 
 - Node.js (LTS recommended)

@@ -1,11 +1,20 @@
 export function openDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open('crystal-chat', 1);
+    const req = indexedDB.open('crystal-chat', 2);
     req.onupgradeneeded = (event) => {
       const db = event.target.result;
       if (!db.objectStoreNames.contains('chats')) {
         const store = db.createObjectStore('chats', { keyPath: 'id' });
         store.createIndex('createdAt', 'createdAt', { unique: false });
+      }
+
+      if (!db.objectStoreNames.contains('memories')) {
+        const store = db.createObjectStore('memories', { keyPath: 'id' });
+        store.createIndex('createdAt', 'createdAt', { unique: false });
+        store.createIndex('b0', 'b0', { unique: false });
+        store.createIndex('b1', 'b1', { unique: false });
+        store.createIndex('b2', 'b2', { unique: false });
+        store.createIndex('b3', 'b3', { unique: false });
       }
     };
     req.onsuccess = () => {

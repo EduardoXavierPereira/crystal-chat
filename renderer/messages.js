@@ -427,7 +427,7 @@ export function renderActiveChat({
     const explainer = document.createElement('div');
     explainer.className = 'temp-chat-explainer';
     explainer.textContent =
-      'Temporary chats are not saved to history and won\'t appear in the sidebar.';
+      'Temporary chats are not saved to history and won\'t appear in the sidebar. Memories are not saved.';
 
     swap.appendChild(chipWrap);
     swap.appendChild(explainer);

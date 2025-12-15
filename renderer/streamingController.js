@@ -6,6 +6,11 @@ export function createStreamingController({
   tempChatId,
   clampNumber,
   streamChat,
+  embedText,
+  embeddingModel,
+  memoryTopK,
+  memoryMaxChars,
+  memoryCandidateK,
   updateRenderedMessage,
   renderActiveChatUI,
   renderChatsUI,
@@ -104,9 +109,47 @@ export function createStreamingController({
     try {
       const sys = (state.systemPrompt || '').toString().trim();
       const hardSys = 'Reply in the same language as the user. Do not default to Chinese unless the user wants Chinese responses.';
-      const combinedSystem = sys ? `${hardSys}\n\n${sys}` : hardSys;
+      let combinedSystem = sys ? `${hardSys}\n\n${sys}` : hardSys;
 
       const historyMessages = chat.messages.slice(0, -1);
+
+      try {
+        const last = historyMessages[historyMessages.length - 1];
+        const prompt = last && last.role === 'user' ? (last.content || '').toString() : '';
+        const apiUrl = getApiUrl() || 'http://localhost:11435/api/chat';
+        const embModel = (embeddingModel || '').toString().trim();
+        if (prompt && embedText && embModel && db) {
+          console.debug('[memories] embedding + retrieval start', { model: embModel });
+          const { formatUserPromptMemory, findSimilarMemories, renderMemoriesBlock, addMemory } = await import('./memories.js');
+
+          const queryEmbedding = await embedText({ apiUrl, model: embModel, text: prompt, signal: streamAbortController.signal });
+          console.debug('[memories] embedded prompt', { dims: Array.isArray(queryEmbedding) ? queryEmbedding.length : 0 });
+
+          const candidates = await findSimilarMemories(db, {
+            queryEmbedding,
+            topK: Number.isFinite(memoryCandidateK) ? memoryCandidateK : 80
+          });
+          console.debug('[memories] retrieved candidates', { count: candidates.length });
+
+          const budget = Number.isFinite(memoryMaxChars) ? memoryMaxChars : 2000;
+          const rendered = renderMemoriesBlock(candidates, { maxChars: budget });
+          console.debug('[memories] selected within budget', { count: rendered.count, usedChars: rendered.usedChars, budget });
+          if (rendered.block) {
+            combinedSystem = `${combinedSystem}\n\n${rendered.block}`;
+          }
+
+          if (chat.id !== tempChatId) {
+            const memoryText = formatUserPromptMemory({ prompt, now: Date.now() });
+            await addMemory(db, { text: memoryText, embedding: queryEmbedding, createdAt: Date.now() });
+            console.debug('[memories] stored prompt memory');
+          } else {
+            console.debug('[memories] skipped saving prompt memory (temporary chat)');
+          }
+        }
+      } catch (e) {
+        console.warn('[memories] embedding/retrieval failed', e);
+      }
+
       const sendMessages = [{ role: 'system', content: combinedSystem }, ...historyMessages];
 
       const isTransientOllamaLoadError = (message) => {
@@ -116,7 +159,7 @@ export function createStreamingController({
 
       const runStream = async () => {
         await streamChat({
-          apiUrl: getApiUrl() || 'http://localhost:11434/api/chat',
+          apiUrl: getApiUrl() || 'http://localhost:11435/api/chat',
           model: (state.selectedModel || modelFallback).toString(),
           temperature: clampNumber(state.creativity, 0, 2, 1),
           messages: sendMessages,

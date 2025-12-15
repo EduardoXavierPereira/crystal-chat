@@ -6,10 +6,13 @@ export function createSetupController({
   showSetupModal,
   onSetupSucceeded
 }) {
+  const EMBEDDING_MODEL = 'embeddinggemma';
+
   const SETUP_STEPS = [
     { key: 'install', title: 'Install Ollama', weight: 20 },
     { key: 'start-server', title: 'Start server', weight: 10 },
-    { key: 'pull-model', title: `Download model (${model})`, weight: 60 },
+    { key: 'pull-model', title: `Download model (${model})`, weight: 50 },
+    { key: 'pull-embedding', title: `Download embeddings model (${EMBEDDING_MODEL})`, weight: 10 },
     { key: 'finalize', title: 'Finalize', weight: 10 }
   ];
 
@@ -138,6 +141,10 @@ export function createSetupController({
     }
     if (stage === 'pull-model') {
       els.setupMessageEl.textContent = 'Downloading model…';
+      return;
+    }
+    if (stage === 'pull-embedding') {
+      els.setupMessageEl.textContent = 'Downloading embeddings model…';
       return;
     }
     if (stage === 'finalize') {
@@ -273,6 +280,26 @@ export function createSetupController({
       setStepStatus('pull-model', 'done', 'Downloaded');
     } else {
       setStepStatus('pull-model', 'done', 'Already installed');
+    }
+
+    let hasEmbeddingModel = false;
+    if (api.ollamaHasModel) {
+      const r = await api.ollamaHasModel(EMBEDDING_MODEL);
+      hasEmbeddingModel = !!r?.ok;
+    }
+    if (!hasEmbeddingModel) {
+      setSetupMainMessageForStage('pull-embedding');
+      setStepStatus('pull-embedding', 'active', 'Downloading embeddings model…');
+      const pullRes = await api.ollamaPullModel(EMBEDDING_MODEL);
+      if (!pullRes?.ok) {
+        if (els.setupMessageEl) {
+          els.setupMessageEl.textContent = 'Failed to download embeddings model. Click Retry.';
+        }
+        throw new Error('Embeddings model download failed.');
+      }
+      setStepStatus('pull-embedding', 'done', 'Downloaded');
+    } else {
+      setStepStatus('pull-embedding', 'done', 'Already installed');
     }
 
     setSetupMainMessageForStage('finalize');

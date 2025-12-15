@@ -69,3 +69,54 @@ export async function streamChat({ apiUrl, model, temperature, messages, onToken
     }
   }
 }
+
+function buildEmbeddingsUrl(apiUrl) {
+  const u = new URL(apiUrl);
+  if (u.pathname.endsWith('/api/chat')) {
+    u.pathname = u.pathname.replace(/\/api\/chat$/, '/api/embeddings');
+    return u.toString();
+  }
+  u.pathname = '/api/embeddings';
+  return u.toString();
+}
+
+export async function embedText({ apiUrl, model, text, signal }) {
+  const url = buildEmbeddingsUrl(apiUrl);
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    signal,
+    body: JSON.stringify({
+      model,
+      prompt: (text || '').toString()
+    })
+  });
+
+  if (!res.ok) {
+    let details = '';
+    try {
+      const txt = await res.text();
+      if (txt) {
+        try {
+          const j = JSON.parse(txt);
+          details = j?.error ? String(j.error) : txt;
+        } catch {
+          details = txt;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    const msg = details
+      ? `Ollama embeddings error: ${res.status} ${res.statusText} - ${details}`
+      : `Ollama embeddings error: ${res.status} ${res.statusText}`;
+    throw new Error(msg);
+  }
+
+  const json = await res.json();
+  const emb = json?.embedding;
+  if (!Array.isArray(emb) || emb.length === 0) {
+    throw new Error('Ollama embeddings error: missing embedding in response.');
+  }
+  return emb;
+}

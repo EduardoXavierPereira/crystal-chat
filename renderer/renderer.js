@@ -9,7 +9,7 @@ import {
 } from './state.js';
 
 import { openDB, loadChats, saveChat, loadTrashedChats, deleteChat, purgeExpiredTrashedChats } from './db.js';
-import { streamChat } from './ollama.js';
+import { streamChat, embedText } from './ollama.js';
 import {
   getEls,
   chatTitleFromMessages,
@@ -30,6 +30,7 @@ import { runInit } from './init.js';
 import { createSetupController } from './setupController.js';
 import { createChatController } from './chatController.js';
 import { attachUIBindings } from './uiBindings.js';
+import { DEFAULT_EMBEDDING_MODEL } from './memories.js';
 
 const els = getEls();
 const state = createInitialState();
@@ -292,6 +293,11 @@ async function continueInitAfterSetup() {
     tempChatId: TEMP_CHAT_ID,
     clampNumber,
     streamChat,
+    embedText,
+    embeddingModel: DEFAULT_EMBEDDING_MODEL,
+    memoryTopK: 6,
+    memoryCandidateK: 80,
+    memoryMaxChars: 2000,
     updateRenderedMessage,
     renderActiveChatUI,
     renderChatsUI,
