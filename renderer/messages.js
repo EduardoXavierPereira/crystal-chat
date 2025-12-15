@@ -200,7 +200,61 @@ export function updateRenderedMessage({ els, msg, messageIndex } = {}) {
   return true;
 }
 
-export function renderMessageElement(msg, { onCopy, onRegenerate, messageIndex } = {}) {
+function createCopyActionButton({ msg, messageIndex, onCopy } = {}) {
+  const copyBtn = document.createElement('button');
+  copyBtn.type = 'button';
+  copyBtn.className = 'message-action';
+  copyBtn.innerHTML =
+    '<span class="message-action-icon" aria-hidden="true">'
+    + '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" xmlns="http://www.w3.org/2000/svg">'
+    + '<rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="2"/>'
+    + '<path d="M7 15H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
+    + '</svg>'
+    + '</span>'
+    + '<span class="message-action-text">Copy</span>';
+  copyBtn.onclick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onCopy?.(msg, messageIndex);
+
+    const textEl = copyBtn.querySelector('.message-action-text');
+    if (!textEl) return;
+    textEl.textContent = 'Copied!';
+    if (copyBtn._copiedTimer) {
+      window.clearTimeout(copyBtn._copiedTimer);
+    }
+    copyBtn._copiedTimer = window.setTimeout(() => {
+      textEl.textContent = 'Copy';
+      copyBtn._copiedTimer = null;
+    }, 1000);
+  };
+  return copyBtn;
+}
+
+function createDeleteUserActionButton({ msg, messageIndex, onDeleteUserMessage } = {}) {
+  const delBtn = document.createElement('button');
+  delBtn.type = 'button';
+  delBtn.className = 'message-action danger';
+  delBtn.innerHTML =
+    '<span class="message-action-icon" aria-hidden="true">'
+    + '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" xmlns="http://www.w3.org/2000/svg">'
+    + '<path d="M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
+    + '<path d="M10 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
+    + '<path d="M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
+    + '<path d="M6 7l1 14h10l1-14" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>'
+    + '<path d="M9 7V4h6v3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>'
+    + '</svg>'
+    + '</span>'
+    + '<span class="message-action-text">Delete</span>';
+  delBtn.onclick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onDeleteUserMessage?.(msg, messageIndex);
+  };
+  return delBtn;
+}
+
+export function renderMessageElement(msg, { onCopy, onRegenerate, onDeleteUserMessage, messageIndex } = {}) {
   const div = document.createElement('div');
   div.className = `message ${msg.role === 'user' ? 'user' : 'assistant'}`;
   if (typeof messageIndex === 'number') div.dataset.messageIndex = String(messageIndex);
@@ -287,37 +341,20 @@ export function renderMessageElement(msg, { onCopy, onRegenerate, messageIndex }
   }
   div.appendChild(content);
 
+  if (msg.role === 'user') {
+    const actions = document.createElement('div');
+    actions.className = 'message-actions';
+
+    actions.appendChild(createCopyActionButton({ msg, messageIndex, onCopy }));
+    actions.appendChild(createDeleteUserActionButton({ msg, messageIndex, onDeleteUserMessage }));
+    div.appendChild(actions);
+  }
+
   if (msg.role === 'assistant' && msg._done !== false) {
     const actions = document.createElement('div');
     actions.className = 'message-actions';
 
-    const copyBtn = document.createElement('button');
-    copyBtn.type = 'button';
-    copyBtn.className = 'message-action';
-    copyBtn.innerHTML =
-      '<span class="message-action-icon" aria-hidden="true">'
-      + '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" xmlns="http://www.w3.org/2000/svg">'
-      + '<rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="2"/>'
-      + '<path d="M7 15H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
-      + '</svg>'
-      + '</span>'
-      + '<span class="message-action-text">Copy</span>';
-    copyBtn.onclick = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      onCopy?.(msg, messageIndex);
-
-      const textEl = copyBtn.querySelector('.message-action-text');
-      if (!textEl) return;
-      textEl.textContent = 'Copied!';
-      if (copyBtn._copiedTimer) {
-        window.clearTimeout(copyBtn._copiedTimer);
-      }
-      copyBtn._copiedTimer = window.setTimeout(() => {
-        textEl.textContent = 'Copy';
-        copyBtn._copiedTimer = null;
-      }, 1000);
-    };
+    const copyBtn = createCopyActionButton({ msg, messageIndex, onCopy });
 
     const regenBtn = document.createElement('button');
     regenBtn.type = 'button';
@@ -351,7 +388,8 @@ export function renderActiveChat({
   autosizePrompt,
   onSuggestion,
   onCopyMessage,
-  onRegenerateMessage
+  onRegenerateMessage,
+  onDeleteUserMessage
 }) {
   const activeChatId = state.sidebarSelection.kind === 'chat' ? state.sidebarSelection.id : null;
   const chat = activeChatId === tempChatId ? tempChat : state.chats.find((c) => c.id === activeChatId);
@@ -517,6 +555,7 @@ export function renderActiveChat({
     els.messagesEl.appendChild(renderMessageElement(msg, {
       onCopy: onCopyMessage,
       onRegenerate: onRegenerateMessage,
+      onDeleteUserMessage,
       messageIndex
     }));
   });

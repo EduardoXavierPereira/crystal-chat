@@ -340,6 +340,7 @@ async function continueInitAfterSetup() {
     saveChat,
     saveUIState,
     hideError,
+    openConfirm,
     autosizePrompt,
     updateSendButtonEnabled,
     tempChatId: TEMP_CHAT_ID,
@@ -425,7 +426,8 @@ function renderActiveChatUI() {
     typingIndicator: els.typingIndicator,
     autosizePrompt,
     onCopyMessage: handleCopyMessage,
-    onRegenerateMessage: handleRegenerateMessage
+    onRegenerateMessage: handleRegenerateMessage,
+    onDeleteUserMessage: (msg, idx) => chatController?.handleDeleteUserMessage?.(msg, idx)
   });
 
   if (state.sidebarSelection.kind === 'trash') {

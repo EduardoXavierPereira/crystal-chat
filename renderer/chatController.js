@@ -5,6 +5,7 @@ export function createChatController({
   saveChat,
   saveUIState,
   hideError,
+  openConfirm,
   autosizePrompt,
   updateSendButtonEnabled,
   tempChatId,
@@ -109,6 +110,42 @@ export function createChatController({
     await streamAssistant(chat);
   }
 
+  async function deleteUserMessageFromIndex(messageIndex) {
+    if (typeof messageIndex !== 'number') return;
+    if (messageIndex < 0) return;
+    if (state.sidebarSelection.kind !== 'chat') return;
+    if (state.isStreaming) return;
+
+    const chat = getActiveChat();
+    if (!chat) return;
+    const msg = chat.messages?.[messageIndex];
+    if (!msg || msg.role !== 'user') return;
+
+    chat.messages = chat.messages.slice(0, messageIndex);
+    hideError(els.errorEl);
+    renderActiveChatUI();
+    if (chat.id !== tempChatId) {
+      await saveChat(db, chat);
+      renderChatsUI();
+    }
+  }
+
+  async function handleDeleteUserMessage(msg, messageIndex) {
+    if (!openConfirm) {
+      await deleteUserMessageFromIndex(messageIndex);
+      return;
+    }
+
+    openConfirm(
+      els,
+      'Delete this user message? This will also delete all messages after it in the chat.',
+      async () => {
+        await deleteUserMessageFromIndex(messageIndex);
+      },
+      (v) => (state.confirmAction = v)
+    );
+  }
+
   async function handleRegenerateMessage(msg, messageIndex) {
     if (state.isStreaming) return;
     if (!msg || msg.role !== 'assistant') return;
@@ -151,6 +188,7 @@ export function createChatController({
     handleSubmit,
     handleCopyMessage,
     handleRegenerateMessage,
+    handleDeleteUserMessage,
     commitRename,
     getActiveChat
   };
