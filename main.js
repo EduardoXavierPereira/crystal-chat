@@ -375,10 +375,14 @@ async function ensureOllamaServer() {
     }
   }
 
-  for (let i = 0; i < 20; i++) {
+  // Ollama can take longer than 10s to become reachable on first run (model cache warmup, etc.).
+  // If we time out too aggressively, the UI shows "Setup failed" even though the server
+  // comes up moments later and a Retry succeeds.
+  const maxChecks = 60;
+  for (let i = 0; i < maxChecks; i++) {
     if (await isOllamaServerReachable()) return { ok: true };
     // Internal progress signal (renderer parses % but does not show logs).
-    const pct = Math.round(((i + 1) / 20) * 100);
+    const pct = Math.round(((i + 1) / maxChecks) * 100);
     sendSetupProgress({ kind: 'log', stream: 'stdout', line: `${pct}%` });
     await sleep(500);
   }
