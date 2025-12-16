@@ -24,6 +24,7 @@ export function createInitialState() {
     creativity: 1,
     textSize: 1,
     systemPrompt: DEFAULT_SYSTEM_PROMPT,
+    enableInternet: false,
     sidebarSelection: { kind: 'chat', id: null }
   };
 }
@@ -38,6 +39,7 @@ export function saveUIState(state) {
       randomness: Number.isFinite(state.creativity) ? state.creativity : 1,
       textSize: Number.isFinite(state.textSize) ? state.textSize : 1,
       systemPrompt: (state.systemPrompt || '').toString(),
+      enableInternet: !!state.enableInternet,
       sidebarSelection:
         state.sidebarSelection.kind === 'chat' && state.sidebarSelection.id === TEMP_CHAT_ID
           ? { kind: 'chat', id: null }
@@ -53,7 +55,13 @@ export function loadUIState() {
   try {
     const raw = localStorage.getItem(UI_STATE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      if (typeof parsed.enableInternet === 'undefined') {
+        parsed.enableInternet = !!(parsed.enableWebSearch || parsed.enableOpenLink);
+      }
+    }
+    return parsed;
   } catch {
     return null;
   }

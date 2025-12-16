@@ -32,6 +32,7 @@ import { createChatController } from './chatController.js';
 import { attachUIBindings } from './uiBindings.js';
 import { DEFAULT_EMBEDDING_MODEL } from './memories.js';
 import { createMemoriesActions } from './memoriesActions.js';
+import { createToggle } from './toggle.js';
 
 const els = getEls();
 const state = createInitialState();
@@ -127,7 +128,8 @@ function updatePromptPlaceholder() {
   if (!els.promptInput) return;
   const m = (state.selectedModel || MODEL).toString();
   const label = formatModelName(m) || m;
-  els.promptInput.placeholder = `Message ${label}`;
+  const internetHint = state.enableInternet ? ' (Internet on)' : '';
+  els.promptInput.placeholder = `Message ${label}${internetHint}`;
 }
 
 function updateSendButtonEnabled() {
@@ -227,6 +229,7 @@ async function continueInitAfterSetup() {
   state.creativity = clampNumber(ui?.creativity ?? ui?.randomness, 0, 2, state.creativity);
   state.textSize = clampNumber(ui?.textSize, 0.85, 1.25, state.textSize);
   state.systemPrompt = (ui?.systemPrompt ?? state.systemPrompt ?? '').toString();
+  state.enableInternet = !!ui?.enableInternet;
 
   if (els.modelDropdownEl) {
     modelDropdown?.destroy?.();
@@ -257,6 +260,24 @@ async function continueInitAfterSetup() {
   if (els.textSizeSlider) els.textSizeSlider.value = String(state.textSize);
   if (els.textSizeValue) els.textSizeValue.textContent = state.textSize.toFixed(2);
   if (els.systemPromptInput) els.systemPromptInput.value = state.systemPrompt;
+
+  if (els.enableInternetToggleEl) {
+    els.enableInternetToggleEl.innerHTML = '';
+    const t = createToggle({
+      id: 'enable-internet-toggle-input',
+      text: '',
+      checked: !!state.enableInternet,
+      switchOnRight: true,
+      showText: false,
+      onChange: (v) => {
+        state.enableInternet = !!v;
+        saveUIState(state);
+        updatePromptPlaceholder();
+      }
+    });
+    els.enableInternetToggleEl.appendChild(t.el);
+  }
+
   setRandomnessSliderFill();
   setTextSizeSliderFill();
   applyChatTextSize();

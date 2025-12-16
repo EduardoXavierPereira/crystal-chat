@@ -190,6 +190,10 @@ export function updateRenderedMessage({ els, msg, messageIndex } = {}) {
     }
   }
 
+  if (!wrap) {
+    return true;
+  }
+
   const toggle = wrap.querySelector('.thinking-toggle');
   const body = wrap.querySelector('.thinking-body');
   if (toggle) {

@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const http = require('http');
+const https = require('https');
 const os = require('os');
 const fs = require('fs');
 
@@ -153,6 +154,121 @@ function httpPostJson(url, body, { timeoutMs = 8000 } = {}) {
     req.write(data);
     req.end();
   });
+}
+
+async function httpGetText(url, { timeoutMs = 8000, maxBytes = 512 * 1024, headers = {}, maxRedirects = 3 } = {}) {
+  const fetchOnce = (u) => {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const settleResolve = (payload) => {
+        if (settled) return;
+        settled = true;
+        resolve(payload);
+      };
+      const settleReject = (err) => {
+        if (settled) return;
+        settled = true;
+        reject(err);
+      };
+
+      const lib = u.protocol === 'https:' ? https : http;
+      const req = lib.request(
+        {
+          method: 'GET',
+          hostname: u.hostname,
+          port: u.port,
+          path: `${u.pathname}${u.search}`,
+          headers: {
+            'User-Agent': 'CrystalChat/0.2',
+            ...headers
+          }
+        },
+        (res) => {
+          const chunks = [];
+          let total = 0;
+          let truncated = false;
+          res.on('data', (buf) => {
+            if (!buf) return;
+            if (total >= maxBytes) {
+              truncated = true;
+              return;
+            }
+
+            const remaining = maxBytes - total;
+            if (buf.length > remaining) {
+              chunks.push(buf.slice(0, remaining));
+              total += remaining;
+              truncated = true;
+              const body = Buffer.concat(chunks).toString('utf8');
+              settleResolve({
+                statusCode: res.statusCode || 0,
+                headers: res.headers || {},
+                body,
+                truncated: true,
+                bytes: total,
+                maxBytes
+              });
+              req.destroy();
+              return;
+            }
+
+            chunks.push(buf);
+            total += buf.length;
+          });
+          res.on('end', () => {
+            const body = Buffer.concat(chunks).toString('utf8');
+            settleResolve({
+              statusCode: res.statusCode || 0,
+              headers: res.headers || {},
+              body,
+              truncated,
+              bytes: total,
+              maxBytes
+            });
+          });
+        }
+      );
+      req.on('error', settleReject);
+      req.setTimeout(timeoutMs, () => {
+        req.destroy(new Error('timeout'));
+      });
+      req.end();
+    });
+  };
+
+  let current = new URL(url);
+  let redirects = 0;
+  while (true) {
+    const res = await fetchOnce(current);
+    const sc = res.statusCode || 0;
+    if ([301, 302, 303, 307, 308].includes(sc) && redirects < maxRedirects) {
+      const loc = (res.headers && (res.headers.location || res.headers.Location)) || '';
+      const location = Array.isArray(loc) ? loc[0] : String(loc || '');
+      if (!location) return res;
+      current = new URL(location, current);
+      redirects += 1;
+      continue;
+    }
+    return res;
+  }
+}
+
+function stripHtmlToText(html) {
+  const raw = (html || '').toString();
+  // Remove script/style
+  let s = raw.replace(/<script[\s\S]*?<\/script>/gi, ' ');
+  s = s.replace(/<style[\s\S]*?<\/style>/gi, ' ');
+  // Drop tags
+  s = s.replace(/<[^>]+>/g, ' ');
+  // Decode a few common entities
+  s = s
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+  return s.replace(/\s+/g, ' ').trim();
 }
 
 async function isOllamaServerReachable() {
@@ -483,4 +599,220 @@ ipcMain.handle('ollama:pullModel', async (_evt, { model }) => {
     message: res.ok ? 'Model ready.' : 'Model download failed.'
   });
   return res;
+});
+
+ipcMain.handle('tools:webSearch', async (_evt, { query }) => {
+  const q = (query || '').toString().trim();
+  if (!q) return { ok: false, error: 'missing_query' };
+
+  const decodeHtml = (s) => {
+    const t = (s || '').toString();
+    return t
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&nbsp;/g, ' ')
+      .trim();
+  };
+
+  const stripTags = (s) => decodeHtml((s || '').toString().replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
+
+  const normalizeResultUrl = (href) => {
+    const raw = (href || '').toString().trim();
+    if (!raw) return '';
+    try {
+      const u = new URL(raw, 'https://duckduckgo.com');
+      const uddg = u.searchParams.get('uddg');
+      if (uddg) {
+        try {
+          return decodeURIComponent(uddg);
+        } catch {
+          return uddg;
+        }
+      }
+      return u.toString();
+    } catch {
+      return raw;
+    }
+  };
+
+  const results = [];
+
+  const debug = {
+    lite: null,
+    html: null,
+    api: null
+  };
+
+  const tryParseLite = async () => {
+    const liteUrl = `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(q)}`;
+    const liteRes = await httpGetText(liteUrl, {
+      timeoutMs: 9000,
+      maxBytes: 900 * 1024,
+      headers: {
+        Accept: 'text/html',
+        'Accept-Language': 'en-US,en;q=0.9'
+      }
+    });
+    debug.lite = {
+      url: liteUrl,
+      statusCode: liteRes.statusCode || 0,
+      contentType: (liteRes.headers && (liteRes.headers['content-type'] || liteRes.headers['Content-Type'])) || '',
+      sample: (liteRes.body || '').toString().slice(0, 500)
+    };
+    if (liteRes.statusCode < 200 || liteRes.statusCode >= 300) return;
+    const html = (liteRes.body || '').toString();
+
+    // DuckDuckGo lite markup varies; be tolerant to:
+    // - single/double quotes
+    // - attribute order (href before class)
+    // - extra classes alongside result-link
+    const re = /<a\b([^>]*)>([\s\S]*?)<\/a>/gi;
+    let m;
+    while ((m = re.exec(html)) && results.length < 8) {
+      const attrs = (m[1] || '').toString();
+      if (!/\bresult-link\b/i.test(attrs)) continue;
+      const hrefMatch = attrs.match(/\bhref\s*=\s*(["'])([^"']+)\1/i);
+      if (!hrefMatch) continue;
+      const url = normalizeResultUrl(hrefMatch[2]);
+      const title = stripTags(m[2]).slice(0, 200);
+      if (!url) continue;
+      results.push({ title, snippet: '', url });
+    }
+  };
+
+  const tryParseHtml = async () => {
+    const htmlUrl = `https://duckduckgo.com/html/?q=${encodeURIComponent(q)}&kl=us-en`;
+    const htmlRes = await httpGetText(htmlUrl, {
+      timeoutMs: 9000,
+      maxBytes: 900 * 1024,
+      headers: {
+        Accept: 'text/html',
+        'Accept-Language': 'en-US,en;q=0.9'
+      }
+    });
+
+    debug.html = {
+      url: htmlUrl,
+      statusCode: htmlRes.statusCode || 0,
+      contentType: (htmlRes.headers && (htmlRes.headers['content-type'] || htmlRes.headers['Content-Type'])) || '',
+      sample: (htmlRes.body || '').toString().slice(0, 500)
+    };
+
+    if (htmlRes.statusCode >= 200 && htmlRes.statusCode < 300) {
+      const html = (htmlRes.body || '').toString();
+      const blocks = html.split(/<div[^>]+class="result__body"[^>]*>/i);
+      for (const b of blocks) {
+        if (results.length >= 8) break;
+        const a = b.match(/<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
+        if (!a) continue;
+        const url = normalizeResultUrl(a[1]);
+        const title = stripTags(a[2]).slice(0, 200);
+        const sn = b.match(/<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/i);
+        const snippet = sn ? stripTags(sn[1]) : '';
+        if (!url) continue;
+        results.push({ title, snippet, url });
+      }
+    }
+  };
+
+  try {
+    await tryParseLite();
+  } catch {
+    // ignore
+  }
+  if (results.length === 0) {
+    try {
+      await tryParseHtml();
+    } catch {
+      // ignore
+    }
+  }
+
+  if (results.length > 0) {
+    return { ok: true, query: q, abstract: '', results, debug };
+  }
+
+  // Fallback: DuckDuckGo Instant Answer API (often returns no “web results”, but may provide RelatedTopics).
+  const apiUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(q)}&format=json&no_redirect=1&no_html=1`;
+  const res = await httpGetText(apiUrl, { timeoutMs: 8000, maxBytes: 512 * 1024 });
+  debug.api = {
+    url: apiUrl,
+    statusCode: res.statusCode || 0,
+    contentType: (res.headers && (res.headers['content-type'] || res.headers['Content-Type'])) || '',
+    sample: (res.body || '').toString().slice(0, 500)
+  };
+  if (res.statusCode < 200 || res.statusCode >= 300) {
+    return { ok: false, error: `http_${res.statusCode}`, debug };
+  }
+  let json;
+  try {
+    json = JSON.parse(res.body || '{}');
+  } catch {
+    return { ok: false, error: 'invalid_json', debug };
+  }
+
+  const pushTopic = (t) => {
+    if (!t) return;
+    const text = t.Text ? String(t.Text) : '';
+    const firstUrl = t.FirstURL ? String(t.FirstURL) : '';
+    if (!text && !firstUrl) return;
+    results.push({ title: text.slice(0, 120), snippet: text, url: firstUrl });
+  };
+
+  if (Array.isArray(json?.RelatedTopics)) {
+    for (const t of json.RelatedTopics) {
+      if (t && Array.isArray(t.Topics)) {
+        for (const inner of t.Topics) pushTopic(inner);
+      } else {
+        pushTopic(t);
+      }
+      if (results.length >= 8) break;
+    }
+  }
+
+  return {
+    ok: true,
+    query: q,
+    abstract: json?.AbstractText ? String(json.AbstractText) : '',
+    results,
+    debug
+  };
+});
+
+ipcMain.handle('tools:openLink', async (_evt, { url }) => {
+  const raw = (url || '').toString().trim();
+  if (!raw) return { ok: false, error: 'missing_url' };
+  let u;
+  try {
+    u = new URL(raw);
+  } catch {
+    return { ok: false, error: 'invalid_url' };
+  }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+    return { ok: false, error: 'unsupported_protocol' };
+  }
+
+  const res = await httpGetText(u.toString(), { timeoutMs: 10000, maxBytes: 700 * 1024 });
+  if (res.statusCode < 200 || res.statusCode >= 300) {
+    return { ok: false, error: `http_${res.statusCode}` };
+  }
+
+  const contentType = (res.headers && (res.headers['content-type'] || res.headers['Content-Type'])) || '';
+  const ct = Array.isArray(contentType) ? contentType.join(';') : String(contentType);
+  const body = res.body || '';
+  const isHtml = /text\/html/i.test(ct) || /<html/i.test(body);
+  const text = isHtml ? stripHtmlToText(body) : body.toString().trim();
+
+  return {
+    ok: true,
+    url: u.toString(),
+    contentType: ct,
+    truncated: !!res.truncated,
+    bytes: typeof res.bytes === 'number' ? res.bytes : undefined,
+    maxBytes: typeof res.maxBytes === 'number' ? res.maxBytes : undefined,
+    text: text.slice(0, 12000)
+  };
 });

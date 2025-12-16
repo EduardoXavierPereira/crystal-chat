@@ -19,6 +19,7 @@ export function getEls() {
     creativitySlider: document.getElementById('creativity-slider'),
     creativityValue: document.getElementById('creativity-value'),
     systemPromptInput: document.getElementById('system-prompt'),
+    enableInternetToggleEl: document.getElementById('enable-internet-toggle'),
     modelInstallEl: document.getElementById('model-install'),
     modelInstallLabelEl: document.getElementById('model-install-label'),
     modelInstallPercentEl: document.getElementById('model-install-percent'),
