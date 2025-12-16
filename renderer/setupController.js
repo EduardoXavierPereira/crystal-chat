@@ -132,7 +132,7 @@ export function createSetupController({
     if (!els.setupMessageEl) return;
     if (stage === 'install') {
       els.setupMessageEl.textContent =
-        'Crystal Chat uses Ollama to run the AI model locally on your computer. Installing Ollama…';
+        'Crystal Chat uses Ollama to run the AI model locally on your computer. We\'re installing it right now. This might take a few minutes. Please be patient.';
       return;
     }
     if (stage === 'start-server') {
