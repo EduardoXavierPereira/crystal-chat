@@ -292,12 +292,14 @@ export function createSetupController({
       setStepStatus('pull-embedding', 'active', 'Downloading embeddings model…');
       const pullRes = await api.ollamaPullModel(EMBEDDING_MODEL);
       if (!pullRes?.ok) {
+        setStepStatus('pull-embedding', 'error', 'Failed (optional)');
         if (els.setupMessageEl) {
-          els.setupMessageEl.textContent = 'Failed to download embeddings model. Click Retry.';
+          els.setupMessageEl.textContent = 'Embeddings model download failed (optional). You can continue, or click Retry to try again.';
         }
-        throw new Error('Embeddings model download failed.');
+        setSetupRetryEnabled(true);
+      } else {
+        setStepStatus('pull-embedding', 'done', 'Downloaded');
       }
-      setStepStatus('pull-embedding', 'done', 'Downloaded');
     } else {
       setStepStatus('pull-embedding', 'done', 'Already installed');
     }

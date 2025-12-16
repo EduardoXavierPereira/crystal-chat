@@ -33,6 +33,7 @@ import { attachUIBindings } from './uiBindings.js';
 import { DEFAULT_EMBEDDING_MODEL } from './memories.js';
 import { createMemoriesActions } from './memoriesActions.js';
 import { createToggle } from './toggle.js';
+import { initDockLayout, setDockStatus } from './dockLayout.js';
 
 const els = getEls();
 const state = createInitialState();
@@ -59,6 +60,27 @@ let streamingController = null;
 let setupController = null;
 
 let chatController = null;
+
+let dock = null;
+
+function getViewElById(viewId) {
+  return document.querySelector(`[data-view-id="${viewId}"]`);
+}
+
+function focusDockView(viewId) {
+  try {
+    dock?.gl?.root?.getItemsByType?.('component')
+      ?.filter((it) => it?.config?.componentState?.viewId === viewId)
+      ?.forEach((it) => {
+        const parent = it.parent;
+        if (parent && typeof parent.setActiveContentItem === 'function') {
+          parent.setActiveContentItem(it);
+        }
+      });
+  } catch {
+    // ignore
+  }
+}
 
 const MODEL_OPTIONS = ['qwen3:1.7b', 'qwen3:4b', 'qwen3:8b'].map((m) => ({
   value: m,
@@ -212,6 +234,28 @@ async function ensureOllamaAndModel() {
 async function continueInitAfterSetup() {
   if (initCompleted) return;
   initCompleted = true;
+
+  try {
+    dock = await initDockLayout({
+      viewEls: {
+        sidebar: getViewElById('sidebar'),
+        chat: getViewElById('chat'),
+        memories: getViewElById('memories'),
+        trash: getViewElById('trash')
+      }
+    });
+  } catch {
+    dock = { ok: false, reason: 'dock-init-throw' };
+  }
+
+  if (!dock?.ok) {
+    // Safe fallback: if the dock layout fails to initialize (e.g. missing dependency),
+    // keep the app usable by showing the staged DOM as a normal layout.
+    document.documentElement.classList.add('dock-fallback');
+    setDockStatus?.(`Dock failed: ${(dock?.reason || 'unknown').toString()}`);
+  } else {
+    document.documentElement.classList.remove('dock-fallback');
+  }
 
   db = await openDB();
   await purgeExpiredTrashedChats(db, TRASH_RETENTION_MS);
@@ -426,13 +470,16 @@ async function continueInitAfterSetup() {
     handleSubmit: (e) => chatController?.handleSubmit?.(e),
     abortStreaming: () => streamingController?.abort(),
     applySidebarSelection: (sel) => chatSidebarController?.applySidebarSelection(sel),
+    focusDockView,
     togglePinnedOpen: () => pinnedActions?.togglePinnedOpen(),
     togglePinnedChat: async (id) => pinnedActions?.togglePinned(id),
     onMemoriesSearchInput: () => memoriesActions?.renderMemoriesUI(),
     onMemoriesAdd: async (text) => memoriesActions?.addMemoryFromText(text),
+    onMemoriesOpen: () => memoriesActions?.renderMemoriesUI(),
     onTrashSearchInput: () => trashActions?.renderTrashUI(),
     onTrashRestoreAll: () => trashActions?.restoreAllTrashedChats(),
-    onTrashDeleteAll: () => trashActions?.requestDeleteAllTrashed()
+    onTrashDeleteAll: () => trashActions?.requestDeleteAllTrashed(),
+    onTrashOpen: () => trashActions?.renderTrashUI()
   });
   if (els.chatSearchInput) {
     els.chatSearchInput.value = state.chatQuery;
@@ -495,18 +542,6 @@ function renderActiveChatUI() {
     onApplyEditUserMessage: (idx, content) => chatController?.applyEditUserMessage?.(idx, content),
     onSwitchBranch: (branchId) => chatController?.switchToBranch?.(branchId)
   });
-
-  if (state.sidebarSelection.kind === 'trash') {
-    trashActions?.renderTrashUI().catch(() => {
-      // ignore
-    });
-  }
-
-  if (state.sidebarSelection.kind === 'memories') {
-    memoriesActions?.renderMemoriesUI().catch(() => {
-      // ignore
-    });
-  }
 }
 
 async function handleSubmit(event) {

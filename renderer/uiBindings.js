@@ -18,13 +18,16 @@ export function attachUIBindings({
   handleSubmit,
   abortStreaming,
   applySidebarSelection,
+  focusDockView,
   togglePinnedOpen,
   togglePinnedChat,
   onMemoriesSearchInput,
   onMemoriesAdd,
+  onMemoriesOpen,
   onTrashSearchInput,
   onTrashRestoreAll,
-  onTrashDeleteAll
+  onTrashDeleteAll,
+  onTrashOpen
 }) {
   const bindingsAbort = new AbortController();
 
@@ -32,7 +35,8 @@ export function attachUIBindings({
     'cc:openMemories',
     (e) => {
       const query = (e?.detail?.query || '').toString().trim();
-      applySidebarSelection({ kind: 'memories' });
+      focusDockView?.('memories');
+      onMemoriesOpen?.();
       if (els.memoriesSearchInput) {
         els.memoriesSearchInput.value = query;
         els.memoriesSearchInput.focus();
@@ -178,25 +182,19 @@ export function attachUIBindings({
   });
 
   els.trashBtn?.addEventListener('click', () => {
-    const nextKind = state.sidebarSelection.kind === 'trash' ? 'chat' : 'trash';
-    if (nextKind === 'trash') {
-      applySidebarSelection({ kind: 'trash' });
-      if (els.trashSearchInput) els.trashSearchInput.focus();
-    } else {
-      applySidebarSelection({ kind: 'chat', id: null });
-      els.promptInput?.focus();
-    }
+    focusDockView?.('trash');
+    onTrashOpen?.();
+    if (els.trashSearchInput) els.trashSearchInput.focus();
+    els.trashBtn?.classList.add('active');
+    els.memoriesBtn?.classList.remove('active');
   });
 
   els.memoriesBtn?.addEventListener('click', () => {
-    const nextKind = state.sidebarSelection.kind === 'memories' ? 'chat' : 'memories';
-    if (nextKind === 'memories') {
-      applySidebarSelection({ kind: 'memories' });
-      if (els.memoriesSearchInput) els.memoriesSearchInput.focus();
-    } else {
-      applySidebarSelection({ kind: 'chat', id: null });
-      els.promptInput?.focus();
-    }
+    focusDockView?.('memories');
+    onMemoriesOpen?.();
+    if (els.memoriesSearchInput) els.memoriesSearchInput.focus();
+    els.memoriesBtn?.classList.add('active');
+    els.trashBtn?.classList.remove('active');
   });
 
   els.pinnedBtn?.addEventListener('click', () => {

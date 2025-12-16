@@ -725,17 +725,10 @@ export function renderActiveChat({
   const activeChatId = state.sidebarSelection.kind === 'chat' ? state.sidebarSelection.id : null;
   const chat = activeChatId === tempChatId ? tempChat : state.chats.find((c) => c.id === activeChatId);
 
-  if (els.trashViewEl) els.trashViewEl.classList.toggle('hidden', state.sidebarSelection.kind !== 'trash');
-  if (els.memoriesViewEl) els.memoriesViewEl.classList.toggle('hidden', state.sidebarSelection.kind !== 'memories');
-  const inTrash = state.sidebarSelection.kind === 'trash';
-  const inMemories = state.sidebarSelection.kind === 'memories';
-  const hideChat = inTrash || inMemories;
-  if (els.chatHeaderEl) els.chatHeaderEl.classList.toggle('hidden', hideChat);
-  if (els.messagesEl) els.messagesEl.classList.toggle('hidden', hideChat);
-  if (els.promptForm) els.promptForm.classList.toggle('hidden', hideChat);
-  if (els.errorEl) els.errorEl.classList.toggle('hidden', hideChat || els.errorEl.textContent === '');
-
-  if (hideChat) return;
+  if (els.chatHeaderEl) els.chatHeaderEl.classList.remove('hidden');
+  if (els.messagesEl) els.messagesEl.classList.remove('hidden');
+  if (els.promptForm) els.promptForm.classList.remove('hidden');
+  if (els.errorEl) els.errorEl.classList.toggle('hidden', els.errorEl.textContent === '');
 
   if (els.chatHeaderTitleEl) {
     els.chatHeaderTitleEl.textContent = chat ? chatTitleFromMessages(chat) : 'New chat';

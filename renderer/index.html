@@ -5,105 +5,38 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Crystal Chat</title>
     <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="../node_modules/golden-layout/dist/css/goldenlayout-base.css" />
+    <link rel="stylesheet" href="../node_modules/golden-layout/dist/css/themes/goldenlayout-dark-theme.css" />
   </head>
   <body>
-    <div id="app">
-      <aside class="sidebar">
-        <div class="sidebar-header">
-          <button id="new-chat" class="button button-ghost full-width">+ New chat</button>
-        </div>
-        <div class="sidebar-search">
-          <input id="chat-search-input" class="sidebar-search-input" type="text" placeholder="Search chats..." />
-        </div>
-        <div class="pinned-group">
-          <button id="pinned-btn" class="button button-ghost full-width">
-            <span class="icon-text">
-              <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 17.27l-5.18 2.73 1-5.85L3.64 9.24l5.9-.86L12 3l2.46 5.38 5.9.86-4.18 4.91 1 5.85L12 17.27Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-              </svg>
-              Pinned chats
-            </span>
-            <span class="dropdown-chevron" aria-hidden="true">▸</span>
-          </button>
-          <div id="pinned-dropdown" class="pinned-dropdown hidden">
-            <div id="pinned-dropdown-list" class="pinned-dropdown-list"></div>
+    <div id="app" class="dock-app">
+      <div id="dock-root" class="dock-root"></div>
+      <div id="view-staging" class="view-staging">
+        <aside class="sidebar" data-view-id="sidebar">
+          <div class="sidebar-header">
+            <button id="new-chat" class="button button-ghost full-width">+ New chat</button>
           </div>
-        </div>
-        <div id="chat-list" class="chat-list"></div>
-        <button id="memories-btn" class="button button-ghost full-width">
-          <span class="icon-text">
-            <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M4 7a3 3 0 0 1 3-3h7a3 3 0 0 1 3 3v11a2 2 0 0 1-2 2H7a3 3 0 0 1-3-3V7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-              <path d="M7 8h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              <path d="M7 12h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              <path d="M7 16h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            </svg>
-            Memories
-          </span>
-        </button>
-        <button id="trash-btn" class="button button-ghost full-width">
-          <span class="icon-text">
-            <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              <path d="M10 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              <path d="M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              <path d="M6 7l1 14h10l1-14" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-              <path d="M9 7V4h6v3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-            </svg>
-            Trash
-          </span>
-        </button>
-      </aside>
-      <main class="chat-area">
-        <section id="memories-view" class="memories-view hidden">
-          <div class="memories-header">
-            <div class="memories-title">
+          <div class="sidebar-search">
+            <input id="chat-search-input" class="sidebar-search-input" type="text" placeholder="Search chats..." />
+          </div>
+          <div class="pinned-group">
+            <button id="pinned-btn" class="button button-ghost full-width">
               <span class="icon-text">
                 <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M4 7a3 3 0 0 1 3-3h7a3 3 0 0 1 3 3v11a2 2 0 0 1-2 2H7a3 3 0 0 1-3-3V7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-                  <path d="M7 8h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                  <path d="M7 12h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                  <path d="M7 16h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M12 17.27l-5.18 2.73 1-5.85L3.64 9.24l5.9-.86L12 3l2.46 5.38 5.9.86-4.18 4.91 1 5.85L12 17.27Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
                 </svg>
-                Memories
+                Pinned chats
               </span>
+              <span class="dropdown-chevron" aria-hidden="true">▸</span>
+            </button>
+            <div id="pinned-dropdown" class="pinned-dropdown hidden">
+              <div id="pinned-dropdown-list" class="pinned-dropdown-list"></div>
             </div>
           </div>
-          <div class="memories-add">
-            <input id="memories-add-input" class="memories-add-input" type="text" placeholder="Add a new memory..." />
-            <button id="memories-add-btn" class="button button-ghost">Add</button>
-          </div>
-          <div class="memories-search">
-            <input id="memories-search-input" class="memories-search-input" type="text" placeholder="Search memories..." />
-          </div>
-          <div id="memories-list" class="memories-list"></div>
-        </section>
-        <section id="trash-view" class="trash-view hidden">
-          <div class="trash-header">
-            <div class="trash-title">
-              <span class="icon-text">
-                <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                  <path d="M10 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                  <path d="M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                  <path d="M6 7l1 14h10l1-14" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-                  <path d="M9 7V4h6v3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-                </svg>
-                Trash
-              </span>
-            </div>
-            <div class="trash-actions">
-              <button id="trash-restore-all" class="button button-ghost">Restore all</button>
-              <button id="trash-delete-all" class="button button-ghost danger">Delete all</button>
-            </div>
-          </div>
-          <div class="trash-note">Chats in Trash are permanently deleted after 30 days.</div>
-          <div class="trash-search">
-            <input id="trash-search-input" class="trash-search-input" type="text" placeholder="Search trash..." />
-          </div>
-          <div id="trash-list" class="trash-list"></div>
-        </section>
-        <div id="confirm-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+          <div id="chat-list" class="chat-list"></div>
+        </aside>
+        <main class="chat-area" data-view-id="chat">
+          <div id="confirm-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
           <div class="modal">
             <div id="confirm-title" class="modal-title">Confirm</div>
             <div id="confirm-message" class="modal-message"></div>
@@ -113,7 +46,7 @@
             </div>
           </div>
         </div>
-        <div id="setup-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="setup-title">
+          <div id="setup-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="setup-title">
           <div class="modal">
             <div id="setup-title" class="modal-title">Setting up Ollama</div>
             <div id="setup-message" class="modal-message"></div>
@@ -133,7 +66,7 @@
             </div>
           </div>
         </div>
-        <header id="chat-header" class="chat-header">
+          <header id="chat-header" class="chat-header">
           <div class="chat-header-left">
             <div id="chat-header-title" class="chat-header-title">New chat</div>
             <div id="chat-header-tokens" class="chat-header-meta">0 tokens</div>
@@ -173,19 +106,19 @@
             </div>
           </div>
         </header>
-        <section id="messages" class="messages">
+          <section id="messages" class="messages">
           <div id="typing-indicator" class="typing chat-typing hidden">
             <div class="spinner"></div>
             Waiting for response...
           </div>
         </section>
-        <div id="error" class="error hidden"></div>
-        <form id="prompt-form" class="prompt-form">
+          <div id="error" class="error hidden"></div>
+          <form id="prompt-form" class="prompt-form">
           <div class="input-shell">
             <div class="prompt-tools">
               <button id="prompt-tools-btn" type="button" class="prompt-tools-btn" aria-label="Chat settings" aria-haspopup="dialog" aria-expanded="false">
                 <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                  <path d="M12 5.5C12 6.88071 10.8807 8 9.5 8C8.11929 8 7 6.88071 7 5.5M12 5.5C12 4.11929 10.8807 3 9.5 3C8.11929 3 7 4.11929 7 5.5M12 5.5H21M7 5.5H3M19 12C19 13.3807 17.8807 14.5 16.5 14.5C15.1193 14.5 14 13.3807 14 12M19 12C19 10.6193 17.8807 9.5 16.5 9.5C15.1193 9.5 14 10.6193 14 12M19 12H21M14 12H3M10 18.5C10 19.8807 8.88071 21 7.5 21C6.11929 21 5 19.8807 5 18.5M10 18.5C10 17.1193 8.88071 16 7.5 16C6.11929 16 5 17.1193 5 18.5M10 18.5H21M5 18.5H3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M12 5.5C12 6.88071 10.8807 8 9.5 8C8.11929 8 7 6.88071 7 5.5M12 5.5C12 4.11929 10.8807 3 9.5 3C8.11929 3 7 4.11929 7 5.5M12 5.5H21M7 5.5H3M19 12C19 13.3807 17.8807 14.5 16.5 14.5C15.1193 14.5 14 13.3807 14 12M19 12C19 10.6193 17.8807 9.5 16.5 9.5C15.1193 9.5 14 10.6193 14 12M19 12H21M14 12H3M10 18.5C10 19.8807 8.88071 21 7.5 21C6.11929 21 5 19.88071 5 18.5M10 18.5C10 17.1193 8.88071 16 7.5 16C6.11929 16 5 17.1193 5 18.5M10 18.5H21M5 18.5H3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
               </button>
               <div id="prompt-tools-popover" class="prompt-tools-popover hidden" role="dialog" aria-label="Chat settings">
@@ -229,9 +162,61 @@
               <span>➤</span>
             </button>
           </div>
-        </form>
-      </main>
+          </form>
+        </main>
+
+        <section id="memories-view" class="memories-view hidden" data-view-id="memories">
+          <div class="memories-header">
+            <div class="memories-title">
+              <span class="icon-text">
+                <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M4 7a3 3 0 0 1 3-3h7a3 3 0 0 1 3 3v11a2 2 0 0 1-2 2H7a3 3 0 0 1-3-3V7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                  <path d="M7 8h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M7 12h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M7 16h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                Memories
+              </span>
+            </div>
+          </div>
+          <div class="memories-add">
+            <input id="memories-add-input" class="memories-add-input" type="text" placeholder="Add a new memory..." />
+            <button id="memories-add-btn" class="button button-ghost">Add</button>
+          </div>
+          <div class="memories-search">
+            <input id="memories-search-input" class="memories-search-input" type="text" placeholder="Search memories..." />
+          </div>
+          <div id="memories-list" class="memories-list"></div>
+        </section>
+
+        <section id="trash-view" class="trash-view hidden" data-view-id="trash">
+          <div class="trash-header">
+            <div class="trash-title">
+              <span class="icon-text">
+                <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M10 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M6 7l1 14h10l1-14" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                  <path d="M9 7V4h6v3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                </svg>
+                Trash
+              </span>
+            </div>
+            <div class="trash-actions">
+              <button id="trash-restore-all" class="button button-ghost">Restore all</button>
+              <button id="trash-delete-all" class="button button-ghost danger">Delete all</button>
+            </div>
+          </div>
+          <div class="trash-note">Chats in Trash are permanently deleted after 30 days.</div>
+          <div class="trash-search">
+            <input id="trash-search-input" class="trash-search-input" type="text" placeholder="Search trash..." />
+          </div>
+          <div id="trash-list" class="trash-list"></div>
+        </section>
+      </div>
     </div>
+    <script src="vendor/golden-layout.bundle.js"></script>
     <script src="../node_modules/marked/marked.min.js"></script>
     <script type="module" src="renderer.js"></script>
   </body>

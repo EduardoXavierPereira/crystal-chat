@@ -32,18 +32,6 @@ export function getEls() {
     pinnedDropdownEl: document.getElementById('pinned-dropdown'),
     pinnedDropdownListEl: document.getElementById('pinned-dropdown-list'),
     statusEl: document.getElementById('status'),
-    memoriesBtn: document.getElementById('memories-btn'),
-    memoriesViewEl: document.getElementById('memories-view'),
-    memoriesListEl: document.getElementById('memories-list'),
-    memoriesSearchInput: document.getElementById('memories-search-input'),
-    memoriesAddInput: document.getElementById('memories-add-input'),
-    memoriesAddBtn: document.getElementById('memories-add-btn'),
-    trashBtn: document.getElementById('trash-btn'),
-    trashViewEl: document.getElementById('trash-view'),
-    trashListEl: document.getElementById('trash-list'),
-    trashSearchInput: document.getElementById('trash-search-input'),
-    trashRestoreAllBtn: document.getElementById('trash-restore-all'),
-    trashDeleteAllBtn: document.getElementById('trash-delete-all'),
     confirmModalEl: document.getElementById('confirm-modal'),
     confirmMessageEl: document.getElementById('confirm-message'),
     confirmCancelBtn: document.getElementById('confirm-cancel'),
@@ -108,8 +96,6 @@ function escapeRegExp(text) {
 
 export function renderChats({ els, state, onSetActiveChat, onStartRename, onTrashChat, onTogglePinned }) {
   els.chatListEl.innerHTML = '';
-  els.trashBtn?.classList.toggle('active', state.sidebarSelection.kind === 'trash');
-  els.memoriesBtn?.classList.toggle('active', state.sidebarSelection.kind === 'memories');
   els.pinnedBtn?.classList.toggle('active', !!state.pinnedOpen);
   els.pinnedBtn?.classList.toggle('open', !!state.pinnedOpen);
 

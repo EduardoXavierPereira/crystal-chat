@@ -332,6 +332,235 @@ body {
 }
 
 #app {
+  min-height: 100%;
+  height: 100%;
+}
+
+#dock-toolbar {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#dock-status {
+  color: var(--muted);
+  font-size: 0.85rem;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: rgba(18, 18, 22, 0.65);
+}
+
+ .lm_goldenlayout {
+  background: var(--bg);
+ }
+
+ /* Prevent the default Golden Layout grey fills from bleeding through */
+ .lm_goldenlayout,
+ .lm_goldenlayout * {
+  box-sizing: border-box;
+ }
+
+ .lm_root,
+ .lm_row,
+ .lm_column,
+ .lm_stack,
+ .lm_items,
+ .lm_item_container,
+ .lm_content {
+  background: transparent !important;
+ }
+
+ .lm_stack {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+ }
+ 
+ .lm_stack .lm_header {
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+ }
+
+ /* Make each docked view feel like a Crystal Chat panel */
+ .lm_content {
+  padding: 0px;
+ }
+ 
+ .lm_content > .dock-view-wrap {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  border: 1px solid var(--border);
+  border-top: 0;
+  background: rgba(18, 18, 22, 0.55);
+ }
+ 
+ /* Let your existing sidebar/chat styles render without being boxed twice */
+ .lm_content > .dock-view-wrap > .sidebar,
+ .lm_content > .dock-view-wrap > .chat-area,
+ .lm_content > .dock-view-wrap > .memories-view,
+ .lm_content > .dock-view-wrap > .trash-view {
+  height: 100%;
+  width: 100%;
+ }
+
+ /* Splitters: subtle like the landing page separators */
+ .lm_splitter {
+  background: rgba(255, 255, 255, 0.035);
+ }
+
+ .lm_splitter.lm_vertical {
+  width: 6px;
+ }
+
+ .lm_splitter.lm_horizontal {
+  height: 6px;
+ }
+
+ .lm_splitter:hover {
+  background: rgba(127, 201, 255, 0.10);
+ }
+
+ .lm_content {
+  background: transparent;
+ }
+
+ .lm_item {
+  background: transparent;
+ }
+
+ .lm_header {
+  background: rgba(22, 22, 27, 0.72);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  position: relative;
+  z-index: 30;
+  pointer-events: auto;
+ }
+
+ .lm_header .lm_tabs {
+  padding: 6px 6px 0 6px;
+ }
+
+ .lm_header .lm_tab {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+  border-radius: var(--radius-md);
+  margin-right: 6px;
+  padding: 6px 10px;
+  font-family: var(--sans);
+  font-weight: 650;
+  cursor: grab;
+  user-select: none;
+  pointer-events: auto;
+ }
+
+ .lm_header .lm_tab:active {
+  cursor: grabbing;
+ }
+
+ /* Make sure content wrappers never sit above headers */
+ .lm_item_container {
+  position: relative;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+ }
+
+ .lm_item_container > .lm_header {
+  pointer-events: auto;
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg);
+ }
+
+ .lm_header .lm_tab:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: var(--text);
+ }
+
+ .lm_header .lm_tab.lm_active {
+  background: rgba(255, 255, 255, 0.02) !important;
+  border-color: color-mix(in srgb, var(--accent) 55%, rgba(255, 255, 255, 0.10)) !important;
+  color: var(--text) !important;
+  box-shadow: none !important;
+ }
+
+ /* Extra specificity to override Golden Layout theme defaults */
+ .lm_goldenlayout .lm_header .lm_tab.lm_active {
+  position: relative;
+ }
+
+ .lm_header .lm_tab .lm_title {
+  font-size: 0.9rem;
+ }
+
+ .lm_splitter {
+  background: rgba(255, 255, 255, 0.035);
+ }
+
+ .lm_splitter:hover {
+  background: rgba(127, 201, 255, 0.10);
+ }
+
+ .lm_dragProxy {
+  background: rgba(18, 18, 22, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
+ }
+
+ .lm_dropTargetIndicator {
+  box-shadow: 0 0 0 2px rgba(127, 201, 255, 0.35) inset;
+  background: rgba(127, 201, 255, 0.06);
+ }
+
+/* Safety net: never show close controls in dock headers */
+.lm_header .lm_close,
+.lm_header .lm_close_tab,
+.lm_tab .lm_close_tab {
+  display: none !important;
+}
+
+.dock-root {
+  position: absolute;
+  inset: 0;
+}
+
+.view-staging {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  left: -9999px;
+  top: -9999px;
+}
+
+.dock-fallback #dock-root {
+  display: none;
+}
+
+.dock-fallback #view-staging {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  left: auto;
+  top: auto;
+}
+
+.dock-fallback #app {
+  display: block;
+}
+
+.dock-fallback #view-staging {
   display: grid;
   grid-template-columns: 300px 1fr;
   min-height: 100%;
