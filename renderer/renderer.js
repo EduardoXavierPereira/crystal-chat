@@ -364,6 +364,8 @@ async function continueInitAfterSetup() {
     embeddingModel: DEFAULT_EMBEDDING_MODEL,
     memoryTopK: 6,
     memoryCandidateK: 80,
+    memoryMinScore: 0.25,
+    memoryRetentionMs: 30 * 24 * 60 * 60 * 1000,
     memoryMaxChars: 2000,
     updateRenderedMessage,
     renderActiveChatUI,
@@ -487,7 +489,11 @@ function renderActiveChatUI() {
     autosizePrompt,
     onCopyMessage: handleCopyMessage,
     onRegenerateMessage: handleRegenerateMessage,
-    onDeleteUserMessage: (msg, idx) => chatController?.handleDeleteUserMessage?.(msg, idx)
+    onDeleteUserMessage: (msg, idx) => chatController?.handleDeleteUserMessage?.(msg, idx),
+    onBeginEditUserMessage: (idx) => chatController?.beginEditUserMessage?.(idx),
+    onCancelEditUserMessage: () => chatController?.cancelEditUserMessage?.(),
+    onApplyEditUserMessage: (idx, content) => chatController?.applyEditUserMessage?.(idx, content),
+    onSwitchBranch: (branchId) => chatController?.switchToBranch?.(branchId)
   });
 
   if (state.sidebarSelection.kind === 'trash') {

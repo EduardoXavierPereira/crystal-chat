@@ -75,34 +75,59 @@ export function attachUIBindings({
     abortStreaming?.();
   });
 
-  els.promptToolsBtn?.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    togglePromptToolsPopover();
+  const attachHoverPopover = ({ btn, popover, open, close }) => {
+    let closeTimer = null;
+
+    const clearCloseTimer = () => {
+      if (!closeTimer) return;
+      clearTimeout(closeTimer);
+      closeTimer = null;
+    };
+
+    const scheduleClose = () => {
+      clearCloseTimer();
+      closeTimer = setTimeout(() => {
+        close();
+      }, 150);
+    };
+
+    btn?.addEventListener('mouseenter', () => {
+      clearCloseTimer();
+      open();
+    });
+    btn?.addEventListener('mouseleave', () => {
+      scheduleClose();
+    });
+
+    popover?.addEventListener('mouseenter', () => {
+      clearCloseTimer();
+      open();
+    });
+    popover?.addEventListener('mouseleave', () => {
+      scheduleClose();
+    });
+  };
+
+  attachHoverPopover({
+    btn: els.promptToolsBtn,
+    popover: els.promptToolsPopover,
+    open: () => {
+      if (!els.promptToolsPopover || !els.promptToolsBtn) return;
+      if (!els.promptToolsPopover.classList.contains('hidden')) return;
+      togglePromptToolsPopover();
+    },
+    close: () => closePromptToolsPopover()
   });
 
-  els.chatHeaderToolsBtn?.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    toggleChatHeaderToolsPopover?.();
-  });
-
-  document.addEventListener('click', (e) => {
-    if (!els.promptToolsPopover || els.promptToolsPopover.classList.contains('hidden')) return;
-    const t = e.target;
-    if (!(t instanceof Node)) return;
-    if (els.promptToolsPopover.contains(t)) return;
-    if (els.promptToolsBtn && els.promptToolsBtn.contains(t)) return;
-    closePromptToolsPopover();
-  });
-
-  document.addEventListener('click', (e) => {
-    if (!els.chatHeaderToolsPopover || els.chatHeaderToolsPopover.classList.contains('hidden')) return;
-    const t = e.target;
-    if (!(t instanceof Node)) return;
-    if (els.chatHeaderToolsPopover.contains(t)) return;
-    if (els.chatHeaderToolsBtn && els.chatHeaderToolsBtn.contains(t)) return;
-    closeChatHeaderToolsPopover?.();
+  attachHoverPopover({
+    btn: els.chatHeaderToolsBtn,
+    popover: els.chatHeaderToolsPopover,
+    open: () => {
+      if (!els.chatHeaderToolsPopover || !els.chatHeaderToolsBtn) return;
+      if (!els.chatHeaderToolsPopover.classList.contains('hidden')) return;
+      toggleChatHeaderToolsPopover?.();
+    },
+    close: () => closeChatHeaderToolsPopover?.()
   });
 
   document.addEventListener('keydown', (e) => {

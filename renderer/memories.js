@@ -83,6 +83,53 @@ export function addMemory(db, { text, embedding, createdAt }) {
   });
 }
 
+function requestToPromise(req) {
+  return new Promise((resolve, reject) => {
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function touchMemoriesRetrieved(db, ids, ts) {
+  const unique = Array.from(new Set((ids || []).filter(Boolean)));
+  if (!unique.length) return;
+  const ms = Number.isFinite(Number(ts)) ? Number(ts) : Date.now();
+
+  const tx = db.transaction('memories', 'readwrite');
+  const store = tx.objectStore('memories');
+  await Promise.all(unique.map(async (id) => {
+    const existing = await requestToPromise(store.get(id));
+    if (!existing || !existing.id) return;
+    const updated = {
+      ...existing,
+      lastRetrievedAt: ms
+    };
+    await requestToPromise(store.put(updated));
+  }));
+}
+
+export async function purgeStaleMemories(db, { retentionMs, now } = {}) {
+  const keepMs = Number.isFinite(retentionMs) ? Math.max(0, retentionMs) : 0;
+  if (!keepMs) return { deleted: 0 };
+  const t = Number.isFinite(Number(now)) ? Number(now) : Date.now();
+
+  const all = await getAllMemories(db);
+  const staleIds = [];
+  for (const m of all) {
+    if (!m || !m.id) continue;
+    const last = Number.isFinite(m.lastRetrievedAt)
+      ? m.lastRetrievedAt
+      : (Number.isFinite(m.createdAt) ? m.createdAt : 0);
+    if (last + keepMs <= t) staleIds.push(m.id);
+  }
+  if (!staleIds.length) return { deleted: 0 };
+
+  const tx = db.transaction('memories', 'readwrite');
+  const store = tx.objectStore('memories');
+  await Promise.all(staleIds.map((id) => requestToPromise(store.delete(id))));
+  return { deleted: staleIds.length };
+}
+
 function getAllMemories(db) {
   return new Promise((resolve, reject) => {
     const tx = db.transaction('memories', 'readonly');
@@ -108,6 +155,31 @@ export async function findSimilarMemories(db, { queryEmbedding, topK = 5 }) {
 
   scored.sort((a, b) => b.score - a.score);
   return scored.slice(0, Math.max(0, topK)).map((x) => x.memory);
+}
+
+export async function findSimilarMemoriesScored(
+  db,
+  {
+    queryEmbedding,
+    topK = 5,
+    minScore = -Infinity
+  }
+) {
+  const qe = Array.from(queryEmbedding || []);
+  if (!qe.length) return [];
+
+  const all = await getAllMemories(db);
+  const scored = [];
+  for (const m of all) {
+    if (!m || !m.id) continue;
+    const emb = Array.isArray(m.embedding) ? m.embedding : [];
+    const score = cosineSimilarity(qe, emb);
+    if (Number.isFinite(minScore) && score < minScore) continue;
+    scored.push({ memory: m, score });
+  }
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, Math.max(0, topK));
 }
 
 export function renderMemoriesBlock(memories, { maxChars = Infinity } = {}) {

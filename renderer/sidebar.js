@@ -63,8 +63,21 @@ export function chatTitleFromMessages(chat) {
   if (chat.title && chat.title.trim() && chat.title.trim() !== 'New chat') {
     return chat.title.trim();
   }
-  if (chat.messages.length === 0) return 'New chat';
-  const firstUser = chat.messages.find((m) => m.role === 'user');
+
+  const getActiveBranchMessages = () => {
+    const branches = Array.isArray(chat?.branches) ? chat.branches : null;
+    if (!branches || branches.length === 0) return Array.isArray(chat?.messages) ? chat.messages : [];
+    const activeId = typeof chat.activeBranchId === 'string' ? chat.activeBranchId : null;
+    const active = activeId ? branches.find((b) => b && b.id === activeId) : null;
+    const msgs = Array.isArray(active?.messages) ? active.messages : null;
+    if (msgs) return msgs;
+    const first = branches.find((b) => Array.isArray(b?.messages));
+    return Array.isArray(first?.messages) ? first.messages : [];
+  };
+
+  const msgs = getActiveBranchMessages();
+  if (msgs.length === 0) return 'New chat';
+  const firstUser = msgs.find((m) => m.role === 'user');
   if (!firstUser) return 'Conversation';
   const trimmed = firstUser.content.trim().replace(/\s+/g, ' ');
   return trimmed.slice(0, 32) + (trimmed.length > 32 ? '…' : '');

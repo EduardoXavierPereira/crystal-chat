@@ -357,7 +357,108 @@ function createDeleteUserActionButton({ msg, messageIndex, onDeleteUserMessage }
   return delBtn;
 }
 
-export function renderMessageElement(msg, { onCopy, onRegenerate, onDeleteUserMessage, messageIndex } = {}) {
+function createEditUserActionButton({ msg, messageIndex, onBeginEditUserMessage } = {}) {
+  const editBtn = document.createElement('button');
+  editBtn.type = 'button';
+  editBtn.className = 'message-action';
+  editBtn.innerHTML =
+    '<span class="message-action-icon" aria-hidden="true">'
+    + '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" xmlns="http://www.w3.org/2000/svg">'
+    + '<path d="m14 6 2.293-2.293a1 1 0 0 1 1.414 0l2.586 2.586a1 1 0 0 1 0 1.414L18 10m-4-4-9.707 9.707a1 1 0 0 0-.293.707V19a1 1 0 0 0 1 1h2.586a1 1 0 0 0 .707-.293L18 10m-4-4 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
+    + '</svg>'
+    + '</span>'
+    + '<span class="message-action-text">Edit</span>';
+  editBtn.onclick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onBeginEditUserMessage?.(messageIndex, msg);
+  };
+  return editBtn;
+}
+
+function computeUserMessageBranchChoices(chat, userMsgId) {
+  const branches = Array.isArray(chat?.branches) ? chat.branches : [];
+  const choices = [];
+  for (const b of branches) {
+    if (!b || !Array.isArray(b.messages)) continue;
+    const found = b.messages.find((m) => m && m.role === 'user' && m.id === userMsgId);
+    if (!found) continue;
+    if (choices.some((c) => c.branchId === b.id)) continue;
+    choices.push({ branchId: b.id, createdAt: b.createdAt || 0 });
+  }
+  choices.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  return choices;
+}
+
+function createBranchNav({ chat, msg, onSwitchBranch } = {}) {
+  if (!chat || !msg || msg.role !== 'user') return null;
+  if (typeof msg.id !== 'string' || !msg.id) return null;
+  const branches = Array.isArray(chat?.branches) ? chat.branches : [];
+  if (branches.length <= 1) return null;
+
+  const choices = computeUserMessageBranchChoices(chat, msg.id);
+  if (choices.length <= 1) return null;
+
+  const activeId = typeof chat.activeBranchId === 'string' ? chat.activeBranchId : null;
+  let idx = choices.findIndex((c) => c.branchId === activeId);
+  if (idx < 0) idx = 0;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'message-branch-nav';
+
+  const prev = document.createElement('button');
+  prev.type = 'button';
+  prev.className = 'message-branch-btn';
+  prev.textContent = '<';
+  prev.disabled = idx <= 0;
+  prev.onclick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (idx <= 0) return;
+    const next = choices[idx - 1];
+    if (!next) return;
+    onSwitchBranch?.(next.branchId);
+  };
+
+  const label = document.createElement('div');
+  label.className = 'message-branch-label';
+  label.textContent = `${idx + 1}/${choices.length}`;
+
+  const next = document.createElement('button');
+  next.type = 'button';
+  next.className = 'message-branch-btn';
+  next.textContent = '>';
+  next.disabled = idx >= choices.length - 1;
+  next.onclick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (idx >= choices.length - 1) return;
+    const n = choices[idx + 1];
+    if (!n) return;
+    onSwitchBranch?.(n.branchId);
+  };
+
+  wrap.appendChild(prev);
+  wrap.appendChild(label);
+  wrap.appendChild(next);
+  return wrap;
+}
+
+export function renderMessageElement(
+  msg,
+  {
+    onCopy,
+    onRegenerate,
+    onDeleteUserMessage,
+    onBeginEditUserMessage,
+    onCancelEditUserMessage,
+    onApplyEditUserMessage,
+    onSwitchBranch,
+    messageIndex,
+    chat,
+    state
+  } = {}
+) {
   const div = document.createElement('div');
   div.className = `message ${msg.role === 'user' ? 'user' : 'assistant'}`;
   if (typeof messageIndex === 'number') div.dataset.messageIndex = String(messageIndex);
@@ -385,7 +486,54 @@ export function renderMessageElement(msg, { onCopy, onRegenerate, onDeleteUserMe
   const content = document.createElement('div');
   content.className = 'message-content';
 
-  if (msg.role === 'assistant' && window.marked) {
+  const isEditingThis =
+    msg.role === 'user'
+    && state
+    && typeof state.editingUserMessageIndex === 'number'
+    && state.editingUserMessageIndex === messageIndex;
+
+  if (isEditingThis) {
+    const editor = document.createElement('div');
+    editor.className = 'message-edit';
+
+    const ta = document.createElement('textarea');
+    ta.className = 'message-edit-input';
+    ta.value = (state.editingUserMessageDraft || '').toString();
+    ta.rows = 3;
+    ta.oninput = () => {
+      state.editingUserMessageDraft = (ta.value || '').toString();
+    };
+
+    const btns = document.createElement('div');
+    btns.className = 'message-edit-actions';
+
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'message-action';
+    cancel.textContent = 'Cancel';
+    cancel.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onCancelEditUserMessage?.();
+    };
+
+    const apply = document.createElement('button');
+    apply.type = 'button';
+    apply.className = 'message-action';
+    apply.textContent = 'Apply';
+    apply.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onApplyEditUserMessage?.(messageIndex, (ta.value || '').toString());
+    };
+
+    btns.appendChild(cancel);
+    btns.appendChild(apply);
+
+    editor.appendChild(ta);
+    editor.appendChild(btns);
+    content.appendChild(editor);
+  } else if (msg.role === 'assistant' && window.marked) {
     content.innerHTML = sanitizeAssistantHtml(window.marked.parse(msg.content || ''));
   } else {
     content.textContent = msg.content;
@@ -521,8 +669,12 @@ export function renderMessageElement(msg, { onCopy, onRegenerate, onDeleteUserMe
     actions.className = 'message-actions';
 
     actions.appendChild(createCopyActionButton({ msg, messageIndex, onCopy }));
+    actions.appendChild(createEditUserActionButton({ msg, messageIndex, onBeginEditUserMessage }));
     actions.appendChild(createDeleteUserActionButton({ msg, messageIndex, onDeleteUserMessage }));
     div.appendChild(actions);
+
+    const nav = createBranchNav({ chat, msg, onSwitchBranch });
+    if (nav) div.appendChild(nav);
   }
 
   if (msg.role === 'assistant' && msg._done !== false) {
@@ -564,7 +716,11 @@ export function renderActiveChat({
   onSuggestion,
   onCopyMessage,
   onRegenerateMessage,
-  onDeleteUserMessage
+  onDeleteUserMessage,
+  onBeginEditUserMessage,
+  onCancelEditUserMessage,
+  onApplyEditUserMessage,
+  onSwitchBranch
 }) {
   const activeChatId = state.sidebarSelection.kind === 'chat' ? state.sidebarSelection.id : null;
   const chat = activeChatId === tempChatId ? tempChat : state.chats.find((c) => c.id === activeChatId);
@@ -776,7 +932,13 @@ export function renderActiveChat({
       onCopy: onCopyMessage,
       onRegenerate: onRegenerateMessage,
       onDeleteUserMessage,
-      messageIndex
+      onBeginEditUserMessage,
+      onCancelEditUserMessage,
+      onApplyEditUserMessage,
+      onSwitchBranch,
+      messageIndex,
+      chat,
+      state
     }));
   });
   els.messagesEl.appendChild(typingIndicator);

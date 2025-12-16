@@ -13,6 +13,8 @@ export function createInitialState() {
     isStreaming: false,
     pendingNew: false,
     renamingId: null,
+    editingUserMessageIndex: null,
+    editingUserMessageDraft: '',
     chatQuery: '',
     trashQuery: '',
     memoriesQuery: '',

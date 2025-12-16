@@ -11,6 +11,8 @@ export function createStreamingController({
   memoryTopK,
   memoryMaxChars,
   memoryCandidateK,
+  memoryMinScore,
+  memoryRetentionMs,
   updateRenderedMessage,
   renderActiveChatUI,
   renderChatsUI,
@@ -19,6 +21,8 @@ export function createStreamingController({
   db
 }) {
   let streamAbortController = null;
+
+  let lastMemoryPurgeTs = 0;
 
   let spinnerRafId = null;
   let spinnerLastTs = 0;
@@ -212,16 +216,34 @@ export function createStreamingController({
         const embModel = (embeddingModel || '').toString().trim();
         if (prompt && embedText && embModel && db) {
           console.debug('[memories] embedding + retrieval start', { model: embModel });
-          const { formatUserPromptMemory, findSimilarMemories, renderMemoriesBlock, addMemory } = await import('./memories.js');
+          const {
+            formatUserPromptMemory,
+            findSimilarMemoriesScored,
+            renderMemoriesBlock,
+            addMemory,
+            touchMemoriesRetrieved,
+            purgeStaleMemories
+          } = await import('./memories.js');
 
           const queryEmbedding = await embedText({ apiUrl, model: embModel, text: prompt, signal: streamAbortController.signal });
           console.debug('[memories] embedded prompt', { dims: Array.isArray(queryEmbedding) ? queryEmbedding.length : 0 });
 
-          const candidates = await findSimilarMemories(db, {
+          const candidateK = Number.isFinite(memoryCandidateK) ? memoryCandidateK : 80;
+          const minScore = Number.isFinite(memoryMinScore) ? memoryMinScore : 0.25;
+          const topK = Number.isFinite(memoryTopK) ? memoryTopK : 6;
+
+          const scoredCandidates = await findSimilarMemoriesScored(db, {
             queryEmbedding,
-            topK: Number.isFinite(memoryCandidateK) ? memoryCandidateK : 80
+            topK: candidateK,
+            minScore
           });
-          console.debug('[memories] retrieved candidates', { count: candidates.length });
+          const candidates = scoredCandidates.map((x) => x.memory).slice(0, Math.max(0, topK));
+          console.debug('[memories] retrieved candidates', {
+            count: candidates.length,
+            candidateK,
+            topK,
+            minScore
+          });
 
           const budget = Number.isFinite(memoryMaxChars) ? memoryMaxChars : 2000;
           const rendered = renderMemoriesBlock(candidates, { maxChars: budget });
@@ -231,6 +253,27 @@ export function createStreamingController({
           }
 
           assistantMsg._retrievedMemories = Array.isArray(rendered.memories) ? rendered.memories : [];
+
+          try {
+            const retrievedIds = (assistantMsg._retrievedMemories || []).map((m) => m?.id).filter(Boolean);
+            await touchMemoriesRetrieved(db, retrievedIds, Date.now());
+          } catch {
+            // ignore
+          }
+
+          try {
+            const keepMs = Number.isFinite(memoryRetentionMs) ? memoryRetentionMs : (30 * 24 * 60 * 60 * 1000);
+            const now = Date.now();
+            if (keepMs > 0 && now - lastMemoryPurgeTs > 6 * 60 * 60 * 1000) {
+              lastMemoryPurgeTs = now;
+              const res = await purgeStaleMemories(db, { retentionMs: keepMs, now });
+              if ((res?.deleted || 0) > 0) {
+                console.debug('[memories] purged stale memories', { deleted: res.deleted, keepMs });
+              }
+            }
+          } catch {
+            // ignore
+          }
 
           if (chat.id !== tempChatId) {
             const memoryText = formatUserPromptMemory({ prompt, now: Date.now() });

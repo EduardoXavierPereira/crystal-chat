@@ -135,6 +135,60 @@
 .memories-retrieved-item:hover {
   background: rgba(255, 255, 255, 0.06);
 }
+
+ .message-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+ }
+
+ .message-edit-input {
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+  border-radius: var(--radius-ml);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  padding: 10px 12px;
+  font-family: var(--sans);
+ }
+
+ .message-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+ }
+
+ .message-branch-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  color: var(--muted);
+ }
+
+ .message-branch-btn {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: transparent;
+  color: var(--text);
+  border-radius: var(--radius-pill);
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+ }
+
+ .message-branch-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+ }
+
+ .message-branch-label {
+  font-size: 0.85rem;
+ }
 :root {
   --bg: #0f0f11;
   --surface: #16161b;
@@ -578,6 +632,7 @@ body {
   padding: 10px 12px;
   cursor: pointer;
   position: relative;
+  z-index: 0;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -625,8 +680,13 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-left: auto;
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3;
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.12s ease;
 }
 
@@ -640,7 +700,7 @@ body {
   height: 26px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
-  background: transparent;
+  background: var(--surface-2);
   color: var(--text);
   cursor: pointer;
   display: inline-flex;
@@ -651,7 +711,7 @@ body {
 }
 
 .chat-menu-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--surface);
 }
 
 .chat-menu {
@@ -728,14 +788,35 @@ body {
 
 .chat-item:hover .chat-actions {
   opacity: 1;
+  pointer-events: auto;
+}
+
+.chat-item:hover {
+  z-index: 2;
 }
 
 .chat-item.active .chat-actions {
   opacity: 1;
+  pointer-events: auto;
+}
+
+.chat-item.active {
+  z-index: 2;
 }
 
 .chat-item:focus-within .chat-actions {
   opacity: 1;
+  pointer-events: auto;
+}
+
+.chat-item:focus-within {
+  z-index: 2;
+}
+
+.chat-item:hover .chat-name,
+.chat-item.active .chat-name,
+.chat-item:focus-within .chat-name {
+  padding-right: 34px;
 }
 
 .chat-rename-input {
