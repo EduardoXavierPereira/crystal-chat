@@ -730,6 +730,14 @@ body {
   opacity: 1;
 }
 
+.chat-item.active .chat-actions {
+  opacity: 1;
+}
+
+.chat-item:focus-within .chat-actions {
+  opacity: 1;
+}
+
 .chat-rename-input {
   width: 100%;
   background: transparent;
