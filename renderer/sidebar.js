@@ -9,6 +9,7 @@ export function getEls() {
     chatHeaderToolsPopover: document.getElementById('chat-header-tools-popover'),
     textSizeSlider: document.getElementById('text-size-slider'),
     textSizeValue: document.getElementById('text-size-value'),
+    magneticScrollToggleEl: document.getElementById('magnetic-scroll-toggle'),
     pinChatToggleEl: document.getElementById('pin-chat-toggle'),
     messagesEl: document.getElementById('messages'),
     promptForm: document.getElementById('prompt-form'),

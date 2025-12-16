@@ -25,6 +25,7 @@ export function createInitialState() {
     selectedModel: MODEL,
     creativity: 1,
     textSize: 1,
+    magneticScroll: false,
     systemPrompt: DEFAULT_SYSTEM_PROMPT,
     enableInternet: false,
     sidebarSelection: { kind: 'chat', id: null }
@@ -40,6 +41,7 @@ export function saveUIState(state) {
       creativity: Number.isFinite(state.creativity) ? state.creativity : 1,
       randomness: Number.isFinite(state.creativity) ? state.creativity : 1,
       textSize: Number.isFinite(state.textSize) ? state.textSize : 1,
+      magneticScroll: !!state.magneticScroll,
       systemPrompt: (state.systemPrompt || '').toString(),
       enableInternet: !!state.enableInternet,
       sidebarSelection:

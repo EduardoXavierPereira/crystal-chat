@@ -63,8 +63,142 @@ let chatController = null;
 
 let dock = null;
 
+let magneticScroll = null;
+
 function getViewElById(viewId) {
   return document.querySelector(`[data-view-id="${viewId}"]`);
+}
+
+function createMagneticScrollController({ els, state }) {
+  let engaged = false;
+  let upImpulse = 0;
+  let impulseTimer = null;
+  let raf = null;
+  let observer = null;
+
+  const nearBottomPx = 90;
+  const releaseDistancePx = 260;
+  const releaseImpulsePx = 160;
+
+  const getDistanceFromBottom = () => {
+    const el = els.messagesEl;
+    if (!el) return Infinity;
+    const scrollTop = Number.isFinite(el.scrollTop) ? el.scrollTop : 0;
+    const clientHeight = Number.isFinite(el.clientHeight) ? el.clientHeight : 0;
+    const scrollHeight = Number.isFinite(el.scrollHeight) ? el.scrollHeight : 0;
+    return Math.max(0, scrollHeight - (scrollTop + clientHeight));
+  };
+
+  const scrollToBottom = () => {
+    const el = els.messagesEl;
+    if (!el) return;
+    if (raf) return;
+    raf = window.requestAnimationFrame(() => {
+      raf = null;
+      try {
+        el.scrollTop = el.scrollHeight;
+      } catch {
+        // ignore
+      }
+    });
+  };
+
+  const resetImpulseSoon = () => {
+    if (impulseTimer) window.clearTimeout(impulseTimer);
+    impulseTimer = window.setTimeout(() => {
+      upImpulse = 0;
+      impulseTimer = null;
+    }, 220);
+  };
+
+  const maybeEngageOrHold = () => {
+    if (!state.magneticScroll) {
+      engaged = false;
+      upImpulse = 0;
+      return;
+    }
+    const dist = getDistanceFromBottom();
+    if (!engaged) {
+      if (dist <= nearBottomPx) {
+        engaged = true;
+        upImpulse = 0;
+        scrollToBottom();
+      }
+      return;
+    }
+
+    if (dist > releaseDistancePx) {
+      engaged = false;
+      upImpulse = 0;
+      return;
+    }
+    scrollToBottom();
+  };
+
+  const onScroll = () => {
+    // If the user is engaged and tries to move away slightly, keep them pinned.
+    // If they move far away (dragging scrollbar / big gesture), release.
+    maybeEngageOrHold();
+  };
+
+  const onWheel = (e) => {
+    if (!state.magneticScroll) return;
+    if (!engaged) return;
+    const dy = Number(e?.deltaY);
+    if (!Number.isFinite(dy)) return;
+    if (dy < 0) {
+      upImpulse += Math.abs(dy);
+      resetImpulseSoon();
+      if (upImpulse >= releaseImpulsePx) {
+        engaged = false;
+        upImpulse = 0;
+      }
+    } else {
+      // scrolling down reinforces the magnet
+      upImpulse = 0;
+    }
+  };
+
+  const attach = () => {
+    const el = els.messagesEl;
+    if (!el) return;
+    el.addEventListener('scroll', onScroll, { passive: true });
+    el.addEventListener('wheel', onWheel, { passive: true });
+    observer = new MutationObserver(() => {
+      if (!state.magneticScroll) return;
+      if (!engaged) return;
+      if (!state.isStreaming) return;
+      scrollToBottom();
+    });
+    observer.observe(el, { subtree: true, childList: true, characterData: true });
+  };
+
+  const detach = () => {
+    const el = els.messagesEl;
+    if (el) {
+      el.removeEventListener('scroll', onScroll);
+      el.removeEventListener('wheel', onWheel);
+    }
+    observer?.disconnect?.();
+    observer = null;
+    if (raf) {
+      window.cancelAnimationFrame(raf);
+      raf = null;
+    }
+    if (impulseTimer) {
+      window.clearTimeout(impulseTimer);
+      impulseTimer = null;
+    }
+    engaged = false;
+    upImpulse = 0;
+  };
+
+  attach();
+
+  return {
+    detach,
+    maybeEngageOrHold
+  };
 }
 
 function focusDockView(viewId) {
@@ -272,6 +406,7 @@ async function continueInitAfterSetup() {
   state.selectedModel = (ui?.selectedModel || state.selectedModel || MODEL).toString();
   state.creativity = clampNumber(ui?.creativity ?? ui?.randomness, 0, 2, state.creativity);
   state.textSize = clampNumber(ui?.textSize, 0.85, 1.25, state.textSize);
+  state.magneticScroll = !!ui?.magneticScroll;
   state.systemPrompt = (ui?.systemPrompt ?? state.systemPrompt ?? '').toString();
   state.enableInternet = !!ui?.enableInternet;
 
@@ -320,6 +455,22 @@ async function continueInitAfterSetup() {
       }
     });
     els.enableInternetToggleEl.appendChild(t.el);
+  }
+
+  if (els.magneticScrollToggleEl) {
+    els.magneticScrollToggleEl.innerHTML = '';
+    const t = createToggle({
+      id: 'magnetic-scroll-toggle-input',
+      text: '',
+      checked: !!state.magneticScroll,
+      switchOnRight: true,
+      showText: false,
+      onChange: (v) => {
+        state.magneticScroll = !!v;
+        saveUIState(state);
+      }
+    });
+    els.magneticScrollToggleEl.appendChild(t.el);
   }
 
   setRandomnessSliderFill();
@@ -433,6 +584,10 @@ async function continueInitAfterSetup() {
 
   renderChatsUI();
   renderActiveChatUI();
+
+  if (!magneticScroll && els.messagesEl) {
+    magneticScroll = createMagneticScrollController({ els, state });
+  }
   chatController = createChatController({
     els,
     state,
