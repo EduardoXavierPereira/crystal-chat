@@ -44,6 +44,11 @@ export function createMemoriesActions({
     if (!id) return;
     await deleteMemory(db, id);
     await renderMemoriesUI();
+    try {
+      window.dispatchEvent(new CustomEvent('cc:memoriesChanged', { detail: { reason: 'delete' } }));
+    } catch {
+      // ignore
+    }
   }
 
   async function addMemoryFromText(text) {
@@ -58,6 +63,11 @@ export function createMemoriesActions({
       const emb = await embedText({ apiUrl, model, text: t });
       await addMemory(db, { text: t, embedding: emb, createdAt: Date.now() });
       await renderMemoriesUI();
+      try {
+        window.dispatchEvent(new CustomEvent('cc:memoriesChanged', { detail: { reason: 'add' } }));
+      } catch {
+        // ignore
+      }
     } catch (e) {
       showError?.(els.errorEl, e?.message || 'Failed to add memory.');
     } finally {

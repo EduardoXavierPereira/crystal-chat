@@ -1493,7 +1493,7 @@ body {
 .pin-chat-toggle {
   width: 100%;
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
  .pin-chat-label-wrap {
@@ -1782,8 +1782,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-height: 0;
-  flex: 1;
+  height: 100%;
   padding: 18px 18px 18px 18px;
 }
 

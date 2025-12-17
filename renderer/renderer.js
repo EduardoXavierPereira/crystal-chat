@@ -203,14 +203,169 @@ function createMagneticScrollController({ els, state }) {
 
 function focusDockView(viewId) {
   try {
-    dock?.gl?.root?.getItemsByType?.('component')
-      ?.filter((it) => it?.config?.componentState?.viewId === viewId)
-      ?.forEach((it) => {
-        const parent = it.parent;
-        if (parent && typeof parent.setActiveContentItem === 'function') {
-          parent.setActiveContentItem(it);
+    const gl = dock?.gl;
+    const root = gl?.root;
+    const items = root?.getItemsByType?.('component') || [];
+    const matches = items.filter((it) => it?.config?.componentState?.viewId === viewId);
+
+    const debug = !!window.__ccDebugDockFocus;
+    const dbg = (...args) => {
+      if (!debug) return;
+      try {
+        console.debug('[dock] focusDockView', ...args);
+      } catch {
+        // ignore
+      }
+    };
+
+    const titleForViewId = (id) => {
+      const v = (id || '').toString().trim();
+      if (!v) return '';
+      if (v === 'sidebar') return 'History';
+      if (v === 'chat') return 'Chat';
+      if (v === 'settings') return 'Settings';
+      if (v === 'memories') return 'Memories';
+      if (v === 'trash') return 'Trash';
+      return v.slice(0, 1).toUpperCase() + v.slice(1);
+    };
+
+    const dispatchTabActivate = (el) => {
+      if (!el) return false;
+      try {
+        el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+      } catch {
+        // ignore
+      }
+      try {
+        el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerId: 1 }));
+        el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, pointerId: 1 }));
+      } catch {
+        // ignore
+      }
+      try {
+        el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+        el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+        el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      } catch {
+        // ignore
+      }
+      try {
+        el.click?.();
+      } catch {
+        // ignore
+      }
+      return true;
+    };
+
+    // Preferred path: find the containing stack and activate the component within it.
+    try {
+      const stacks = root?.getItemsByType?.('stack') || [];
+      for (const it of matches) {
+        const stack = stacks.find((s) => Array.isArray(s?.content) && s.content.includes(it));
+        if (!stack) continue;
+        dbg('found stack', { viewId, stackId: stack?.id, title: it?.config?.title });
+
+        try {
+          if (typeof stack.setActiveContentItem === 'function') {
+            stack.setActiveContentItem(it);
+            return;
+          }
+        } catch {
+          // ignore
         }
-      });
+
+        try {
+          if (typeof stack.setActiveComponentItem === 'function') {
+            stack.setActiveComponentItem(it);
+            return;
+          }
+        } catch {
+          // ignore
+        }
+
+        try {
+          if (typeof stack.setActiveItem === 'function') {
+            stack.setActiveItem(it);
+            return;
+          }
+        } catch {
+          // ignore
+        }
+
+        try {
+          if (typeof stack.setActiveItemIndex === 'function' && Array.isArray(stack.content)) {
+            const idx = stack.content.indexOf(it);
+            if (idx >= 0) {
+              stack.setActiveItemIndex(idx);
+              return;
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+      dbg('no containing stack found (or no stack activation API worked)', { viewId, matches: matches.length });
+    } catch {
+      // ignore
+    }
+
+    const activateViaApi = (item) => {
+      let p = item?.parent;
+      while (p) {
+        try {
+          if (typeof p.setActiveContentItem === 'function') {
+            p.setActiveContentItem(item);
+            return true;
+          }
+          if (typeof p.setActiveComponentItem === 'function') {
+            p.setActiveComponentItem(item);
+            return true;
+          }
+          if (typeof p.setActiveItem === 'function') {
+            p.setActiveItem(item);
+            return true;
+          }
+          if (typeof p.setActiveItemIndex === 'function' && Array.isArray(p.content)) {
+            const idx = p.content.indexOf(item);
+            if (idx >= 0) {
+              p.setActiveItemIndex(idx);
+              return true;
+            }
+          }
+        } catch {
+          // ignore
+        }
+        p = p.parent;
+      }
+      return false;
+    };
+
+    for (const it of matches) {
+      if (activateViaApi(it)) return;
+    }
+
+    // DOM fallback: click the corresponding GoldenLayout tab.
+    try {
+      const rootEl = document.getElementById('dock-root');
+      const wantedTitle = titleForViewId(viewId);
+      const wanted = wantedTitle.toLowerCase();
+
+      const tabEls = Array.from(rootEl?.querySelectorAll?.('.lm_tab') || []);
+      const titleEls = Array.from(rootEl?.querySelectorAll?.('.lm_tab .lm_title') || []);
+
+      const tabByText = tabEls.find((t) => (t?.textContent || '').toString().trim().toLowerCase() === wanted);
+      if (tabByText) {
+        dbg('dom fallback tab(.lm_tab)', { found: true, title: wantedTitle, viewId });
+        if (dispatchTabActivate(tabByText)) return;
+      }
+
+      const titleEl = titleEls.find((t) => (t?.textContent || '').toString().trim().toLowerCase() === wanted);
+      const tabFromTitle = titleEl?.closest?.('.lm_tab') || titleEl;
+      dbg('dom fallback tab(.lm_title)', { found: !!tabFromTitle, title: wantedTitle, viewId });
+      if (dispatchTabActivate(tabFromTitle)) return;
+    } catch {
+      // ignore
+    }
   } catch {
     // ignore
   }
@@ -391,12 +546,27 @@ async function continueInitAfterSetup() {
     document.documentElement.classList.remove('dock-fallback');
   }
 
+  try {
+    window.__ccDock = dock;
+    window.__ccFocusDockView = focusDockView;
+  } catch {
+    // ignore
+  }
+
   db = await openDB();
   await purgeExpiredTrashedChats(db, TRASH_RETENTION_MS);
   setInterval(() => {
-    purgeExpiredTrashedChats(db, TRASH_RETENTION_MS).catch(() => {
-      // ignore
-    });
+    purgeExpiredTrashedChats(db, TRASH_RETENTION_MS)
+      .then(() => {
+        try {
+          window.dispatchEvent(new CustomEvent('cc:trashChanged', { detail: { reason: 'purge' } }));
+        } catch {
+          // ignore
+        }
+      })
+      .catch(() => {
+        // ignore
+      });
   }, 6 * 60 * 60 * 1000);
   state.chats = await loadChats(db);
   const ui = loadUIState();
@@ -547,6 +717,14 @@ async function continueInitAfterSetup() {
     }
   });
 
+  // Ensure Trash renders at least once at startup.
+  // In dock mode, switching tabs may not go through sidebar button click handlers.
+  try {
+    trashActions?.renderTrashUI?.();
+  } catch {
+    // ignore
+  }
+
   streamingController = createStreamingController({
     els,
     state,
@@ -570,6 +748,12 @@ async function continueInitAfterSetup() {
     db
   });
 
+  try {
+    memoriesActions?.renderMemoriesUI?.();
+  } catch {
+    // ignore
+  }
+
   chatSidebarController = createChatSidebarController({
     els,
     state,
@@ -579,7 +763,8 @@ async function continueInitAfterSetup() {
     renderActiveChatUI,
     commitRename,
     getTrashActions: () => trashActions,
-    getPinnedActions: () => pinnedActions
+    getPinnedActions: () => pinnedActions,
+    focusDockView
   });
 
   renderChatsUI();

@@ -7,13 +7,18 @@ export function createChatSidebarController({
   renderActiveChatUI,
   commitRename,
   getTrashActions,
-  getPinnedActions
+  getPinnedActions,
+  focusDockView
 }) {
   function applySidebarSelection(next) {
     setSidebarSelection(state, next);
     saveUIState(state);
     renderChatsUI();
     renderActiveChatUI();
+
+    if (next?.kind === 'chat') {
+      focusDockView?.('chat');
+    }
   }
 
   function setActiveChat(id) {

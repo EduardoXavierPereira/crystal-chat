@@ -311,6 +311,54 @@ function injectDockStyles() {
   document.head.appendChild(style);
 }
 
+function suppressDockTabTooltips(rootEl) {
+  if (!rootEl || rootEl.__ccSuppressTooltipsAttached) return;
+
+  const scrub = (node) => {
+    const el = node && node.nodeType === 1 ? node : null;
+    if (!el) return;
+
+    const targets = [];
+    if (el.matches?.('.lm_tab, .lm_tab .lm_title')) targets.push(el);
+    try {
+      targets.push(...Array.from(el.querySelectorAll?.('.lm_tab, .lm_tab .lm_title') || []));
+    } catch {
+      // ignore
+    }
+
+    targets.forEach((t) => {
+      try {
+        t.removeAttribute('title');
+      } catch {
+        // ignore
+      }
+    });
+  };
+
+  scrub(rootEl);
+
+  const obs = new MutationObserver((mutations) => {
+    mutations.forEach((m) => {
+      if (m.type === 'attributes') {
+        scrub(m.target);
+      }
+      if (m.type === 'childList') {
+        m.addedNodes?.forEach?.((n) => scrub(n));
+      }
+    });
+  });
+
+  obs.observe(rootEl, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ['title']
+  });
+
+  rootEl.__ccSuppressTooltipsAttached = true;
+  rootEl.__ccSuppressTooltipsObserver = obs;
+}
+
 export async function initDockLayout({ viewEls }) {
   injectDockStyles();
   moveToBodyIfPresent('confirm-modal');
@@ -318,6 +366,8 @@ export async function initDockLayout({ viewEls }) {
 
   const rootEl = document.getElementById('dock-root');
   if (!rootEl) return { ok: false, reason: 'dock-root-missing' };
+
+  suppressDockTabTooltips(rootEl);
 
   const GoldenLayout = window?.GoldenLayoutBundle?.GoldenLayout;
   if (!GoldenLayout) return { ok: false, reason: 'golden-layout-bundle-missing' };
@@ -355,6 +405,12 @@ export async function initDockLayout({ viewEls }) {
 
     container.element.appendChild(wrap);
 
+    try {
+      suppressDockTabTooltips(rootEl);
+    } catch {
+      // ignore
+    }
+
     container.on('destroy', () => {
       const staging = document.getElementById('view-staging');
       if (staging && el && el.parentElement) {
@@ -373,6 +429,12 @@ export async function initDockLayout({ viewEls }) {
           : (typeof gl.toConfig === 'function' ? gl.toConfig() : null);
         if (next) saveDockLayout(next);
       }
+    } catch {
+      // ignore
+    }
+
+    try {
+      suppressDockTabTooltips(rootEl);
     } catch {
       // ignore
     }

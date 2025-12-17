@@ -269,6 +269,11 @@ export function createStreamingController({
               const res = await purgeStaleMemories(db, { retentionMs: keepMs, now });
               if ((res?.deleted || 0) > 0) {
                 console.debug('[memories] purged stale memories', { deleted: res.deleted, keepMs });
+                try {
+                  window.dispatchEvent(new CustomEvent('cc:memoriesChanged', { detail: { reason: 'purge' } }));
+                } catch {
+                  // ignore
+                }
               }
             }
           } catch {
@@ -279,6 +284,11 @@ export function createStreamingController({
             const memoryText = formatUserPromptMemory({ prompt, now: Date.now() });
             await addMemory(db, { text: memoryText, embedding: queryEmbedding, createdAt: Date.now() });
             console.debug('[memories] stored prompt memory');
+            try {
+              window.dispatchEvent(new CustomEvent('cc:memoriesChanged', { detail: { reason: 'auto-add' } }));
+            } catch {
+              // ignore
+            }
           } else {
             console.debug('[memories] skipped saving prompt memory (temporary chat)');
           }

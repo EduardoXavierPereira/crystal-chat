@@ -42,6 +42,12 @@ export function createTrashActions({
     }
     renderChatsUI();
     renderActiveChatUI();
+    await renderTrashUI();
+    try {
+      window.dispatchEvent(new CustomEvent('cc:trashChanged', { detail: { reason: 'trashed' } }));
+    } catch {
+      // ignore
+    }
   }
 
   async function restoreChat(id) {
@@ -54,12 +60,22 @@ export function createTrashActions({
     state.chats = await loadChats(db);
     renderChatsUI();
     await renderTrashUI();
+    try {
+      window.dispatchEvent(new CustomEvent('cc:trashChanged', { detail: { reason: 'restored' } }));
+    } catch {
+      // ignore
+    }
   }
 
   async function deleteChatPermanently(id) {
     await deleteChat(db, id);
     await purgeExpiredTrashedChats(db, trashRetentionMs);
     await renderTrashUI();
+    try {
+      window.dispatchEvent(new CustomEvent('cc:trashChanged', { detail: { reason: 'permanent-delete' } }));
+    } catch {
+      // ignore
+    }
   }
 
   async function restoreAllTrashedChats() {
@@ -74,6 +90,11 @@ export function createTrashActions({
     state.chats = await loadChats(db);
     renderChatsUI();
     await renderTrashUI();
+    try {
+      window.dispatchEvent(new CustomEvent('cc:trashChanged', { detail: { reason: 'restore-all' } }));
+    } catch {
+      // ignore
+    }
   }
 
   async function deleteAllTrashedChatsPermanently() {
@@ -81,6 +102,11 @@ export function createTrashActions({
     if (trashed.length === 0) return;
     await Promise.all(trashed.map((c) => deleteChat(db, c.id)));
     await renderTrashUI();
+    try {
+      window.dispatchEvent(new CustomEvent('cc:trashChanged', { detail: { reason: 'delete-all' } }));
+    } catch {
+      // ignore
+    }
   }
 
   async function requestDeleteAllTrashed() {

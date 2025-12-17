@@ -176,12 +176,14 @@ export function attachUIBindings({
   els.newChatBtn.addEventListener('click', async () => {
     state.pendingNew = true;
     applySidebarSelection({ kind: 'chat', id: null });
+    focusDockView?.('chat');
     els.promptInput.value = '';
     autosizePrompt(els.promptInput);
     els.promptInput.focus();
   });
 
   els.trashBtn?.addEventListener('click', () => {
+    applySidebarSelection?.({ kind: 'trash' });
     focusDockView?.('trash');
     onTrashOpen?.();
     if (els.trashSearchInput) els.trashSearchInput.focus();
@@ -190,12 +192,35 @@ export function attachUIBindings({
   });
 
   els.memoriesBtn?.addEventListener('click', () => {
+    applySidebarSelection?.({ kind: 'memories' });
     focusDockView?.('memories');
     onMemoriesOpen?.();
     if (els.memoriesSearchInput) els.memoriesSearchInput.focus();
     els.memoriesBtn?.classList.add('active');
     els.trashBtn?.classList.remove('active');
   });
+
+  window.addEventListener(
+    'cc:memoriesChanged',
+    () => {
+      const buttonActive = !!els.memoriesBtn?.classList?.contains?.('active');
+      const selectionActive = state?.sidebarSelection?.kind === 'memories';
+      const noButton = !els.memoriesBtn;
+      if (noButton || buttonActive || selectionActive) onMemoriesOpen?.();
+    },
+    { signal: bindingsAbort.signal }
+  );
+
+  window.addEventListener(
+    'cc:trashChanged',
+    () => {
+      const buttonActive = !!els.trashBtn?.classList?.contains?.('active');
+      const selectionActive = state?.sidebarSelection?.kind === 'trash';
+      const noButton = !els.trashBtn;
+      if (noButton || buttonActive || selectionActive) onTrashOpen?.();
+    },
+    { signal: bindingsAbort.signal }
+  );
 
   els.pinnedBtn?.addEventListener('click', () => {
     togglePinnedOpen?.();
