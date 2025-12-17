@@ -567,7 +567,7 @@ ipcMain.handle('ollama:check', async () => {
     hasBinary,
     serverReachable,
     models,
-    hasQwen3_4b: await hasOllamaModel('qwen3:4b')
+    hasQwen3_4b: await hasOllamaModel('qwen3-vl:4b')
   };
 });
 
@@ -596,11 +596,29 @@ ipcMain.handle('ollama:pullModel', async (_evt, { model }) => {
   if (!server.ok) {
     return { ok: false, reason: 'server_not_ready', server };
   }
-  const res = await pullModel(model);
+  const m = (model || '').toString().trim();
+  const stage = m === 'embeddinggemma' ? 'pull-embedding' : 'pull-model';
+
+  sendSetupProgress({
+    kind: 'stage',
+    stage,
+    message: stage === 'pull-embedding' ? `Downloading embeddings model: ${m}` : `Downloading model: ${m}`
+  });
+
+  const ollamaCmd = await resolveOllamaCommand();
+  const p = spawnWithOutput(ollamaCmd, ['pull', m], { env: buildOllamaEnv() });
+  const code = await new Promise((resolve) => p.on('close', resolve));
+  const res = { ok: code === 0, code };
   sendSetupProgress({
     kind: res.ok ? 'done' : 'error',
-    stage: 'pull-model',
-    message: res.ok ? 'Model ready.' : 'Model download failed.'
+    stage,
+    message: res.ok
+      ? stage === 'pull-embedding'
+        ? 'Embeddings model ready.'
+        : 'Model ready.'
+      : stage === 'pull-embedding'
+        ? 'Embeddings model download failed.'
+        : 'Model download failed.'
   });
   return res;
 });

@@ -70,9 +70,18 @@ function getViewElById(viewId) {
 }
 
 function applyThemeAndAccent(state) {
+  const resolveTheme = () => {
+    const raw = (state?.theme || 'system').toString();
+    if (raw === 'dark' || raw === 'light') return raw;
+    if (raw !== 'system') return 'dark';
+    try {
+      return window.matchMedia?.('(prefers-color-scheme: dark)')?.matches ? 'dark' : 'light';
+    } catch {
+      return 'dark';
+    }
+  };
   try {
-    const theme = (state?.theme || 'dark').toString();
-    document.documentElement.dataset.theme = theme;
+    document.documentElement.dataset.theme = resolveTheme();
   } catch {
     // ignore
   }
@@ -386,7 +395,13 @@ function focusDockView(viewId) {
   }
 }
 
-const MODEL_OPTIONS = ['qwen3:1.7b', 'qwen3:4b', 'qwen3:8b'].map((m) => ({
+function closePromptToolsPopover() {
+  if (!els.promptToolsPopover || !els.promptToolsBtn) return;
+  els.promptToolsPopover.classList.add('hidden');
+  els.promptToolsBtn.setAttribute('aria-expanded', 'false');
+}
+
+const MODEL_OPTIONS = ['qwen3-vl:2b', 'qwen3-vl:4b', 'qwen3-vl:8b'].map((m) => ({
   value: m,
   label: formatModelName(m)
 }));
@@ -415,12 +430,6 @@ setupController = createSetupController({
     setupSucceeded = true;
   }
 });
-
-function closePromptToolsPopover() {
-  if (!els.promptToolsPopover || !els.promptToolsBtn) return;
-  els.promptToolsPopover.classList.add('hidden');
-  els.promptToolsBtn.setAttribute('aria-expanded', 'false');
-}
 
 function closeChatHeaderToolsPopover() {
   if (!els.chatHeaderToolsPopover || !els.chatHeaderToolsBtn) return;
@@ -596,7 +605,7 @@ async function continueInitAfterSetup() {
   state.systemPrompt = (ui?.systemPrompt ?? state.systemPrompt ?? '').toString();
   state.enableInternet = !!ui?.enableInternet;
   state.updateMemoryEnabled = typeof ui?.updateMemoryEnabled === 'boolean' ? ui.updateMemoryEnabled : state.updateMemoryEnabled;
-  state.theme = (ui?.theme || state.theme || 'dark').toString();
+  state.theme = (ui?.theme || state.theme || 'system').toString();
   state.accent = (ui?.accent || state.accent || '#7fc9ff').toString();
   applyThemeAndAccent(state);
 
@@ -775,7 +784,7 @@ async function continueInitAfterSetup() {
     embeddingModel: DEFAULT_EMBEDDING_MODEL,
     memoryTopK: 6,
     memoryCandidateK: 80,
-    memoryMinScore: 0.25,
+    memoryMinScore: 0.1,
     memoryRetentionMs: 30 * 24 * 60 * 60 * 1000,
     memoryMaxChars: 2000,
     updateRenderedMessage,

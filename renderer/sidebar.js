@@ -23,6 +23,7 @@ export function getEls() {
     enableInternetToggleEl: document.getElementById('enable-internet-toggle'),
     updateMemoryToggleEl: document.getElementById('update-memory-toggle'),
     themeSegmentEl: document.getElementById('theme-segment'),
+    themeSystemBtn: document.getElementById('theme-system-btn'),
     themeDarkBtn: document.getElementById('theme-dark-btn'),
     themeLightBtn: document.getElementById('theme-light-btn'),
     accentSwatchesEl: document.getElementById('accent-swatches'),

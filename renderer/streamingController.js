@@ -186,6 +186,7 @@ export function createStreamingController({
       );
 
       let editorOut = '';
+      let editorFinal = null;
       await streamChat({
         apiUrl,
         model: responseModel,
@@ -193,7 +194,10 @@ export function createStreamingController({
         messages: [
           { role: 'system', content: memoryEditorSystem },
           ...(Array.isArray(sendMessages) ? sendMessages : []),
-          { role: 'assistant', content: (assistantContent || '').toString() }
+          {
+            role: 'user',
+            content: `Assistant's last reply (for context):\n${(assistantContent || '').toString()}\n\nNow output the JSON memory actions.`
+          }
         ],
         signal: controller.signal,
         onThinking: (t) => {
@@ -201,8 +205,14 @@ export function createStreamingController({
         },
         onToken: (t) => {
           editorOut += (t || '').toString();
+        },
+        onFinal: (j) => {
+          editorFinal = j;
         }
       });
+
+      console.log('[memories] memory editor raw response', editorOut);
+      console.log('[memories] memory editor final', editorFinal);
 
       const parsed = extractFirstJsonObject(editorOut);
       const actions = normalizeMemoryEditorActions(parsed);
@@ -421,7 +431,8 @@ export function createStreamingController({
 
     try {
       const sys = (state.systemPrompt || '').toString().trim();
-      const hardSys = 'Reply in the same language as the user. Do not default to Chinese unless the user wants Chinese responses.';
+      const hardSys = 'Reply in the same language as the user. Do not default to Chinese unless the user wants Chinese responses.'
+        + 'You have access to a vector database of long-term memories you\'ve gathered over previous chats with the user. If it\'s empty, that means you have no memories.';
       let combinedSystem = sys ? `${hardSys}\n\n${sys}` : hardSys;
 
       const toolBlock = toolInstructionBlock();

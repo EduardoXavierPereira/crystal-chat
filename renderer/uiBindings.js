@@ -31,9 +31,24 @@ export function attachUIBindings({
 }) {
   const bindingsAbort = new AbortController();
 
+  const prefersDarkMql = (() => {
+    try {
+      return window.matchMedia?.('(prefers-color-scheme: dark)') || null;
+    } catch {
+      return null;
+    }
+  })();
+
+  const resolveTheme = () => {
+    const raw = (state?.theme || 'system').toString();
+    if (raw === 'dark' || raw === 'light') return raw;
+    if (raw !== 'system') return 'dark';
+    return prefersDarkMql?.matches ? 'dark' : 'light';
+  };
+
   const applyThemeAndAccent = () => {
     try {
-      document.documentElement.dataset.theme = (state?.theme || 'dark').toString();
+      document.documentElement.dataset.theme = resolveTheme();
     } catch {
       // ignore
     }
@@ -45,9 +60,11 @@ export function attachUIBindings({
   };
 
   const updateThemeSegmentUI = () => {
-    const theme = (state?.theme || 'dark').toString();
+    const theme = (state?.theme || 'system').toString();
+    els.themeSystemBtn?.classList.toggle('active', theme === 'system');
     els.themeDarkBtn?.classList.toggle('active', theme === 'dark');
     els.themeLightBtn?.classList.toggle('active', theme === 'light');
+    els.themeSystemBtn?.setAttribute('aria-pressed', theme === 'system' ? 'true' : 'false');
     els.themeDarkBtn?.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
     els.themeLightBtn?.setAttribute('aria-pressed', theme === 'light' ? 'true' : 'false');
   };
@@ -91,6 +108,34 @@ export function attachUIBindings({
   );
 
   window.addEventListener('beforeunload', () => bindingsAbort.abort(), { signal: bindingsAbort.signal });
+
+  if (prefersDarkMql?.addEventListener) {
+    prefersDarkMql.addEventListener(
+      'change',
+      () => {
+        if ((state?.theme || 'system').toString() !== 'system') return;
+        applyThemeAndAccent();
+      },
+      { signal: bindingsAbort.signal }
+    );
+  } else if (prefersDarkMql?.addListener) {
+    const handler = () => {
+      if ((state?.theme || 'system').toString() !== 'system') return;
+      applyThemeAndAccent();
+    };
+    prefersDarkMql.addListener(handler);
+    bindingsAbort.signal.addEventListener(
+      'abort',
+      () => {
+        try {
+          prefersDarkMql.removeListener(handler);
+        } catch {
+          // ignore
+        }
+      },
+      { once: true }
+    );
+  }
 
   els.promptForm.addEventListener('submit', handleSubmit);
   els.promptInput.addEventListener('input', () => {
@@ -217,13 +262,14 @@ export function attachUIBindings({
   const onThemeClick = (e) => {
     const btn = e?.currentTarget;
     const next = (btn?.dataset?.theme || '').toString();
-    if (next !== 'dark' && next !== 'light') return;
+    if (next !== 'system' && next !== 'dark' && next !== 'light') return;
     state.theme = next;
     applyThemeAndAccent();
     updateThemeSegmentUI();
     saveUIState(state);
   };
 
+  els.themeSystemBtn?.addEventListener('click', onThemeClick, { signal: bindingsAbort.signal });
   els.themeDarkBtn?.addEventListener('click', onThemeClick, { signal: bindingsAbort.signal });
   els.themeLightBtn?.addEventListener('click', onThemeClick, { signal: bindingsAbort.signal });
 

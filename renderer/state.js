@@ -1,5 +1,5 @@
 export const API_URL = 'http://localhost:11435/api/chat';
-export const MODEL = 'qwen3:4b';
+export const MODEL = 'qwen3-vl:4b';
 
 export const DEFAULT_SYSTEM_PROMPT = 'You are a helpful chatbot assistant for Crystal Chat. Reply in the user\'s preferred language.';
 
@@ -18,7 +18,7 @@ export function createInitialState() {
     chatQuery: '',
     trashQuery: '',
     memoriesQuery: '',
-    theme: 'dark',
+    theme: 'system',
     accent: '#7fc9ff',
     confirmAction: null,
     temporaryChatEnabled: false,
@@ -48,7 +48,7 @@ export function saveUIState(state) {
       systemPrompt: (state.systemPrompt || '').toString(),
       enableInternet: !!state.enableInternet,
       updateMemoryEnabled: typeof state.updateMemoryEnabled === 'boolean' ? state.updateMemoryEnabled : true,
-      theme: (state.theme || 'dark').toString(),
+      theme: (state.theme || 'system').toString(),
       accent: (state.accent || '#7fc9ff').toString(),
       sidebarSelection:
         state.sidebarSelection.kind === 'chat' && state.sidebarSelection.id === TEMP_CHAT_ID
@@ -74,7 +74,7 @@ export function loadUIState() {
         parsed.updateMemoryEnabled = true;
       }
       if (typeof parsed.theme === 'undefined') {
-        parsed.theme = 'dark';
+        parsed.theme = 'system';
       }
       if (typeof parsed.accent === 'undefined') {
         parsed.accent = '#7fc9ff';
