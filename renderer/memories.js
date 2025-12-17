@@ -90,6 +90,39 @@ function requestToPromise(req) {
   });
 }
 
+export async function getMemoryById(db, id) {
+  if (!id) return null;
+  const tx = db.transaction('memories', 'readonly');
+  const store = tx.objectStore('memories');
+  const existing = await requestToPromise(store.get(id));
+  return existing || null;
+}
+
+export async function updateMemory(db, { id, text, embedding, updatedAt }) {
+  if (!id) return null;
+  const tx = db.transaction('memories', 'readwrite');
+  const store = tx.objectStore('memories');
+  const existing = await requestToPromise(store.get(id));
+  if (!existing || !existing.id) return null;
+
+  const e = Array.from(embedding || []);
+  const next = {
+    ...existing,
+    text: (text || '').toString(),
+    embedding: e,
+    updatedAt: Number.isFinite(Number(updatedAt)) ? Number(updatedAt) : Date.now()
+  };
+  await requestToPromise(store.put(next));
+  return next;
+}
+
+export async function deleteMemoryById(db, id) {
+  if (!id) return;
+  const tx = db.transaction('memories', 'readwrite');
+  const store = tx.objectStore('memories');
+  await requestToPromise(store.delete(id));
+}
+
 export async function touchMemoriesRetrieved(db, ids, ts) {
   const unique = Array.from(new Set((ids || []).filter(Boolean)));
   if (!unique.length) return;

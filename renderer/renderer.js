@@ -579,6 +579,7 @@ async function continueInitAfterSetup() {
   state.magneticScroll = !!ui?.magneticScroll;
   state.systemPrompt = (ui?.systemPrompt ?? state.systemPrompt ?? '').toString();
   state.enableInternet = !!ui?.enableInternet;
+  state.updateMemoryEnabled = typeof ui?.updateMemoryEnabled === 'boolean' ? ui.updateMemoryEnabled : state.updateMemoryEnabled;
 
   if (els.modelDropdownEl) {
     modelDropdown?.destroy?.();
@@ -625,6 +626,22 @@ async function continueInitAfterSetup() {
       }
     });
     els.enableInternetToggleEl.appendChild(t.el);
+  }
+
+  if (els.updateMemoryToggleEl) {
+    els.updateMemoryToggleEl.innerHTML = '';
+    const t = createToggle({
+      id: 'update-memory-toggle-input',
+      text: '',
+      checked: !!state.updateMemoryEnabled,
+      switchOnRight: true,
+      showText: false,
+      onChange: (v) => {
+        state.updateMemoryEnabled = !!v;
+        saveUIState(state);
+      }
+    });
+    els.updateMemoryToggleEl.appendChild(t.el);
   }
 
   if (els.magneticScrollToggleEl) {

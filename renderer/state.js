@@ -1,4 +1,4 @@
-export const API_URL = 'http://localhost:11434/api/chat';
+export const API_URL = 'http://localhost:11435/api/chat';
 export const MODEL = 'qwen3:4b';
 
 export const DEFAULT_SYSTEM_PROMPT = 'You are a helpful chatbot assistant for Crystal Chat. Reply in the user\'s preferred language.';
@@ -28,6 +28,7 @@ export function createInitialState() {
     magneticScroll: false,
     systemPrompt: DEFAULT_SYSTEM_PROMPT,
     enableInternet: false,
+    updateMemoryEnabled: true,
     sidebarSelection: { kind: 'chat', id: null }
   };
 }
@@ -44,6 +45,7 @@ export function saveUIState(state) {
       magneticScroll: !!state.magneticScroll,
       systemPrompt: (state.systemPrompt || '').toString(),
       enableInternet: !!state.enableInternet,
+      updateMemoryEnabled: typeof state.updateMemoryEnabled === 'boolean' ? state.updateMemoryEnabled : true,
       sidebarSelection:
         state.sidebarSelection.kind === 'chat' && state.sidebarSelection.id === TEMP_CHAT_ID
           ? { kind: 'chat', id: null }
@@ -63,6 +65,9 @@ export function loadUIState() {
     if (parsed && typeof parsed === 'object') {
       if (typeof parsed.enableInternet === 'undefined') {
         parsed.enableInternet = !!(parsed.enableWebSearch || parsed.enableOpenLink);
+      }
+      if (typeof parsed.updateMemoryEnabled === 'undefined') {
+        parsed.updateMemoryEnabled = true;
       }
     }
     return parsed;

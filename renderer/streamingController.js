@@ -22,6 +22,9 @@ export function createStreamingController({
 }) {
   let streamAbortController = null;
 
+  let memoryEditorRunning = false;
+  let memoryEditorQueuedJob = null;
+
   let lastMemoryPurgeTs = 0;
 
   let spinnerRafId = null;
@@ -69,6 +72,200 @@ export function createStreamingController({
     streamAbortController?.abort();
   }
 
+  const setStatusTemp = (suffix, { ms = 2000 } = {}) => {
+    try {
+      if (!els?.statusEl) return;
+      const prev = (els.statusEl.textContent || '').toString();
+      els.statusEl.textContent = suffix ? (prev ? `${prev} • ${suffix}` : suffix) : prev;
+      window.setTimeout(() => {
+        try {
+          if (els?.statusEl) els.statusEl.textContent = prev;
+        } catch {
+          // ignore
+        }
+      }, Number.isFinite(ms) ? ms : 2000);
+    } catch {
+      // ignore
+    }
+  };
+
+  const extractFirstJsonObject = (text) => {
+    const raw = (text || '').toString().trim();
+    if (!raw) return null;
+    if (raw.length > 20000) return null;
+
+    const start = raw.indexOf('{');
+    if (start < 0) return null;
+    let depth = 0;
+    let end = -1;
+    for (let i = start; i < raw.length; i += 1) {
+      const ch = raw[i];
+      if (ch === '{') depth += 1;
+      if (ch === '}') {
+        depth -= 1;
+        if (depth === 0) {
+          end = i;
+          break;
+        }
+      }
+    }
+    if (end < 0) return null;
+    const candidate = raw.slice(start, end + 1).trim();
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      return null;
+    }
+  };
+
+  const normalizeMemoryEditorActions = (obj) => {
+    const out = [];
+    const push = (a) => {
+      if (!a || typeof a !== 'object') return;
+      const type = (a.type || a.action || '').toString().trim().toLowerCase();
+      if (type !== 'create' && type !== 'update' && type !== 'delete') return;
+      const id = typeof a.id === 'string' ? a.id : null;
+      const text = typeof a.text === 'string' ? a.text : null;
+      out.push({ type, id, text });
+    };
+
+    if (!obj || typeof obj !== 'object') return out;
+    if (Array.isArray(obj.actions)) {
+      obj.actions.forEach(push);
+      return out;
+    }
+    if (Array.isArray(obj.create)) {
+      obj.create.forEach((x) => push({ type: 'create', text: x?.text ?? x }));
+    }
+    if (Array.isArray(obj.update)) {
+      obj.update.forEach((x) => push({ type: 'update', id: x?.id, text: x?.text }));
+    }
+    if (Array.isArray(obj.delete)) {
+      obj.delete.forEach((x) => push({ type: 'delete', id: x?.id ?? x }));
+    }
+    return out;
+  };
+
+  async function runMemoryEditorJob(job) {
+    const {
+      apiUrl,
+      responseModel,
+      embModel,
+      sendMessages,
+      assistantContent,
+      retrieved
+    } = job || {};
+
+    if (!apiUrl || !responseModel || !embModel || !db || !streamChat || !embedText) return;
+    const controller = new AbortController();
+
+    try {
+      setStatusTemp('Updating memories…', { ms: 2500 });
+
+      const memoryEditorSystem = (
+        'You are Crystal Chat\'s Memory Editor AI. Your job is to maintain long-term memories about the user.\n'
+        + 'Memory is good data as long as it\'s not noise, so create as many high quality memories as possible.\n'
+        + 'Keep in mind memories can\'t reference each other; they must be separated.\n\n'
+        + 'You will be given the chat context (including any retrieved memories).\n'
+        + 'Decide whether to CREATE new memories, UPDATE existing ones, or DELETE useless/duplicated ones.\n\n'
+        + 'Create memories for stable user facts such as (non-exhaustive): name, pronouns, location/timezone, language, preferences, dislikes, ongoing projects, recurring goals, constraints, tools they use, and long-term plans.\n'
+        + 'Do NOT create memories for one-off requests, transient states ("I\'m hungry"), or the assistant\'s own messages.\n'
+        + 'Prefer 1 memory per fact. Keep each memory short, specific, and directly useful.\n'
+        + 'If a new message refines an existing memory, UPDATE it instead of creating duplicates.\n'
+        + 'If a memory is redundant, wrong, or low-value, DELETE it.\n\n'
+        + 'Output ONLY a single line of JSON, no markdown, no extra text.\n'
+        + 'Schema:\n'
+        + '{"actions":[{"type":"create","text":"..."},{"type":"update","id":"...","text":"..."},{"type":"delete","id":"..."}]}\n'
+        + 'You may also output {"create":[...],"update":[...],"delete":[...]} as an alternative.\n'
+        + 'If no changes are needed, output: {"actions":[]}.\n\n'
+        + 'Examples (format only; do not copy content):\n'
+        + '{"actions":[{"type":"create","text":"User\'s name is Eduardo."}]}\n'
+        + '{"actions":[{"type":"update","id":"<existing_id>","text":"User prefers short, bullet-point answers."}]}\n'
+        + '{"actions":[{"type":"delete","id":"<duplicate_id>"}]}\n\n'
+        + `Retrieved memories (for reference): ${JSON.stringify((retrieved || []).map((m) => ({ id: m?.id, text: m?.text })))}\n`
+      );
+
+      let editorOut = '';
+      await streamChat({
+        apiUrl,
+        model: responseModel,
+        temperature: 0,
+        messages: [
+          { role: 'system', content: memoryEditorSystem },
+          ...(Array.isArray(sendMessages) ? sendMessages : []),
+          { role: 'assistant', content: (assistantContent || '').toString() }
+        ],
+        signal: controller.signal,
+        onThinking: (t) => {
+          editorOut += (t || '').toString();
+        },
+        onToken: (t) => {
+          editorOut += (t || '').toString();
+        }
+      });
+
+      const parsed = extractFirstJsonObject(editorOut);
+      const actions = normalizeMemoryEditorActions(parsed);
+      console.log('[memories] memory editor parsed', {
+        hasJson: !!parsed,
+        actions: actions.map((a) => ({ type: a.type, id: a.id, textLen: (a.text || '').length }))
+      });
+
+      if (!actions.length) {
+        setStatusTemp('No memory changes');
+        return;
+      }
+
+      const { addMemory, updateMemory, deleteMemoryById } = await import('./memories.js');
+      for (const a of actions) {
+        if (!a || a.type === 'delete') {
+          if (a?.id) await deleteMemoryById(db, a.id);
+          continue;
+        }
+        const text = (a.text || '').toString().trim();
+        if (!text) continue;
+        const emb = await embedText({ apiUrl, model: embModel, text, signal: controller.signal });
+        if (a.type === 'create') {
+          await addMemory(db, { text, embedding: emb, createdAt: Date.now() });
+        } else if (a.type === 'update') {
+          if (!a.id) continue;
+          await updateMemory(db, { id: a.id, text, embedding: emb, updatedAt: Date.now() });
+        }
+      }
+
+      try {
+        window.dispatchEvent(new CustomEvent('cc:memoriesChanged', { detail: { reason: 'editor' } }));
+      } catch {
+        // ignore
+      }
+
+      setStatusTemp('Memories updated');
+    } catch (e) {
+      console.warn('[memories] memory editor failed', e);
+      setStatusTemp('Memory editor failed');
+    }
+  }
+
+  async function processMemoryEditorQueue() {
+    if (memoryEditorRunning) return;
+    memoryEditorRunning = true;
+    try {
+      while (memoryEditorQueuedJob) {
+        const job = memoryEditorQueuedJob;
+        memoryEditorQueuedJob = null;
+        await runMemoryEditorJob(job);
+      }
+    } finally {
+      memoryEditorRunning = false;
+    }
+  }
+
+  function enqueueMemoryEditor(job) {
+    // Coalesce: keep only the latest job, since newer context supersedes older.
+    memoryEditorQueuedJob = job;
+    void processMemoryEditorQueue();
+  }
+
   async function streamAssistant(chat) {
     state.isStreaming = true;
     els.typingIndicator.classList.remove('hidden');
@@ -111,6 +308,31 @@ export function createStreamingController({
       if (now - lastStreamingFullRenderTs < 250) return;
       lastStreamingFullRenderTs = now;
       renderActiveChatUI();
+    };
+
+    const setTypingIndicatorLabel = (text) => {
+      const el = els.typingIndicator;
+      if (!el) return;
+      const labelEl = els.typingIndicatorLabelEl;
+      if (labelEl) {
+        labelEl.textContent = (text || '').toString();
+        return;
+      }
+      try {
+        const nodes = Array.from(el.childNodes || []);
+        const textNode = nodes.find((n) => n && n.nodeType === Node.TEXT_NODE);
+        if (textNode) {
+          textNode.textContent = ` ${String(text || '')}`;
+          return;
+        }
+      } catch {
+        // ignore
+      }
+      try {
+        el.dataset.ccLabel = (text || '').toString();
+      } catch {
+        // ignore
+      }
     };
 
     const toolInstructionBlock = () => {
@@ -181,6 +403,64 @@ export function createStreamingController({
       return { tool, args };
     };
 
+    const extractFirstJsonObject = (text) => {
+      const raw = (text || '').toString().trim();
+      if (!raw) return null;
+      if (raw.length > 20000) return null;
+
+      const start = raw.indexOf('{');
+      if (start < 0) return null;
+      let depth = 0;
+      let end = -1;
+      for (let i = start; i < raw.length; i += 1) {
+        const ch = raw[i];
+        if (ch === '{') depth += 1;
+        if (ch === '}') {
+          depth -= 1;
+          if (depth === 0) {
+            end = i;
+            break;
+          }
+        }
+      }
+      if (end < 0) return null;
+      const candidate = raw.slice(start, end + 1).trim();
+      try {
+        return JSON.parse(candidate);
+      } catch {
+        return null;
+      }
+    };
+
+    const normalizeMemoryEditorActions = (obj) => {
+      const out = [];
+      const push = (a) => {
+        if (!a || typeof a !== 'object') return;
+        const type = (a.type || a.action || '').toString().trim().toLowerCase();
+        if (type !== 'create' && type !== 'update' && type !== 'delete') return;
+        const id = typeof a.id === 'string' ? a.id : null;
+        const text = typeof a.text === 'string' ? a.text : null;
+        out.push({ type, id, text });
+      };
+
+      if (!obj || typeof obj !== 'object') return out;
+      if (Array.isArray(obj.actions)) {
+        obj.actions.forEach(push);
+        return out;
+      }
+
+      if (Array.isArray(obj.create)) {
+        obj.create.forEach((x) => push({ type: 'create', text: x?.text ?? x }));
+      }
+      if (Array.isArray(obj.update)) {
+        obj.update.forEach((x) => push({ type: 'update', id: x?.id, text: x?.text }));
+      }
+      if (Array.isArray(obj.delete)) {
+        obj.delete.forEach((x) => push({ type: 'delete', id: x?.id ?? x }));
+      }
+      return out;
+    };
+
     const runTool = async ({ tool, args }) => {
       const api = window.electronAPI;
       if (!api) throw new Error('Tools unavailable.');
@@ -217,10 +497,8 @@ export function createStreamingController({
         if (prompt && embedText && embModel && db) {
           console.debug('[memories] embedding + retrieval start', { model: embModel });
           const {
-            formatUserPromptMemory,
             findSimilarMemoriesScored,
             renderMemoriesBlock,
-            addMemory,
             touchMemoriesRetrieved,
             purgeStaleMemories
           } = await import('./memories.js');
@@ -278,19 +556,6 @@ export function createStreamingController({
             }
           } catch {
             // ignore
-          }
-
-          if (chat.id !== tempChatId) {
-            const memoryText = formatUserPromptMemory({ prompt, now: Date.now() });
-            await addMemory(db, { text: memoryText, embedding: queryEmbedding, createdAt: Date.now() });
-            console.debug('[memories] stored prompt memory');
-            try {
-              window.dispatchEvent(new CustomEvent('cc:memoriesChanged', { detail: { reason: 'auto-add' } }));
-            } catch {
-              // ignore
-            }
-          } else {
-            console.debug('[memories] skipped saving prompt memory (temporary chat)');
           }
         }
       } catch (e) {
@@ -429,6 +694,41 @@ export function createStreamingController({
 
       assistantMsg._done = true;
       renderActiveChatUI();
+
+      try {
+        const apiUrl = getApiUrl() || 'http://localhost:11435/api/chat';
+        const embModel = (embeddingModel || '').toString().trim();
+        const responseModel = (state.selectedModel || modelFallback).toString();
+        const allowUpdate = !!state.updateMemoryEnabled && chat.id !== tempChatId;
+        if (!allowUpdate) {
+          console.log('[memories] memory editor skipped', {
+            updateMemoryEnabled: !!state.updateMemoryEnabled,
+            isTempChat: chat.id === tempChatId
+          });
+        } else if (!db || !embedText || !embModel || !streamChat || !responseModel) {
+          console.log('[memories] memory editor prerequisites missing', {
+            hasDb: !!db,
+            hasEmbedText: !!embedText,
+            embeddingModel: embModel,
+            hasStreamChat: !!streamChat,
+            responseModel
+          });
+          setStatusTemp('Memory editor unavailable');
+        } else {
+          const retrieved = Array.isArray(assistantMsg._retrievedMemories) ? assistantMsg._retrievedMemories : [];
+          enqueueMemoryEditor({
+            apiUrl,
+            responseModel,
+            embModel,
+            sendMessages,
+            assistantContent: (assistantMsg.content || '').toString(),
+            retrieved
+          });
+        }
+      } catch (e) {
+        console.warn('[memories] memory editor enqueue failed', e);
+      }
+
       if (chat.id !== tempChatId) {
         await saveChat(db, chat);
         renderChatsUI();

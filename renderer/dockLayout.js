@@ -17,7 +17,8 @@ function enforceSidebarStackWidth(item, width) {
       (c) => c?.type === 'component' && c?.componentState?.viewId === 'sidebar'
     );
     if (hasSidebar) {
-      item.width = width;
+      // Preserve user-resized widths; only apply a default when width is missing.
+      if (typeof item.width !== 'number') item.width = width;
     }
   }
 
@@ -28,7 +29,16 @@ function enforceSidebarStackWidth(item, width) {
 
 function safeStringifyJson(value) {
   try {
-    return JSON.stringify(value);
+    const seen = new WeakSet();
+    return JSON.stringify(value, (_key, v) => {
+      if (typeof v === 'function') return undefined;
+      if (v && typeof v === 'object') {
+        if (v.nodeType || v === window) return undefined;
+        if (seen.has(v)) return undefined;
+        seen.add(v);
+      }
+      return v;
+    });
   } catch {
     return null;
   }
@@ -36,6 +46,15 @@ function safeStringifyJson(value) {
 
 function isLayoutConfigLike(obj) {
   return !!obj && typeof obj === 'object' && (obj.root || obj.content);
+}
+
+function extractLayoutRoot(config) {
+  if (!config || typeof config !== 'object') return null;
+  if (config.root && typeof config.root === 'object') return config.root;
+  if (Array.isArray(config.content) && config.content[0] && typeof config.content[0] === 'object') {
+    return config.content[0];
+  }
+  return null;
 }
 
 export function clearSavedDockLayout() {
@@ -53,7 +72,8 @@ export function loadSavedDockLayout() {
 }
 
 export function saveDockLayout(config) {
-  const raw = safeStringifyJson(config);
+  const normalized = normalizeLayoutConfig(config);
+  const raw = safeStringifyJson(normalized);
   if (!raw) return;
   try {
     localStorage.setItem(LAYOUT_KEY, raw);
@@ -359,6 +379,65 @@ function suppressDockTabTooltips(rootEl) {
   rootEl.__ccSuppressTooltipsObserver = obs;
 }
 
+function createDockLayoutSaver(gl, rootEl) {
+  let timer = null;
+
+  const getConfig = () => {
+    try {
+      const raw =
+        typeof gl?.saveLayout === 'function'
+          ? gl.saveLayout()
+          : (typeof gl?.toConfig === 'function' ? gl.toConfig() : null);
+      const root = extractLayoutRoot(raw);
+      if (!root) return null;
+
+      // Persist a minimal config that matches what GoldenLayout loadLayout expects.
+      // Some configs returned by toConfig/saveLayout include internal/resolved fields
+      // (eg numeric+unit split) that can break parsing on reload.
+      const base = getDefaultLayoutConfig();
+      const minimal = { ...base, root };
+      delete minimal.content;
+      delete minimal.openPopouts;
+      delete minimal.resolved;
+      return minimal;
+    } catch {
+      return null;
+    }
+  };
+
+  const flush = () => {
+    try {
+      if (timer) {
+        window.clearTimeout(timer);
+        timer = null;
+      }
+      const next = getConfig();
+      if (next) {
+        saveDockLayout(next);
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      suppressDockTabTooltips(rootEl);
+    } catch {
+      // ignore
+    }
+  };
+
+  const schedule = () => {
+    try {
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(flush, 150);
+    } catch {
+      // ignore
+    }
+  };
+
+  return { schedule, flush };
+}
+
 export async function initDockLayout({ viewEls }) {
   injectDockStyles();
   moveToBodyIfPresent('confirm-modal');
@@ -376,14 +455,51 @@ export async function initDockLayout({ viewEls }) {
   patchGoldenLayoutSingleTabDrag(window?.GoldenLayoutBundle);
 
   const saved = loadSavedDockLayout();
+  const hadSaved = !!saved;
   const defaultConfig = normalizeLayoutConfig(getDefaultLayoutConfig());
-  const config = normalizeLayoutConfig(saved || defaultConfig);
+  const config = saved || defaultConfig;
 
   let gl;
   try {
     gl = new GoldenLayout(rootEl);
   } catch {
     return { ok: false, reason: 'golden-layout-ctor-failed' };
+  }
+
+  const saver = createDockLayoutSaver(gl, rootEl);
+
+  // Fallback persistence: some GoldenLayout builds miss stateChanged for certain interactions.
+  // Save on interaction end events while the user is manipulating the dock.
+  try {
+    const isInDock = (t) => {
+      try {
+        return !!(t && rootEl && (t === rootEl || rootEl.contains(t)));
+      } catch {
+        return false;
+      }
+    };
+
+    const scheduleIfDockTarget = (e) => {
+      if (!isInDock(e?.target)) return;
+      saver.schedule();
+    };
+
+    window.addEventListener('pointerup', scheduleIfDockTarget, true);
+    window.addEventListener('mouseup', scheduleIfDockTarget, true);
+    window.addEventListener('touchend', scheduleIfDockTarget, true);
+    window.addEventListener('keyup', scheduleIfDockTarget, true);
+    window.addEventListener('resize', () => saver.schedule(), { passive: true });
+  } catch {
+    // ignore
+  }
+
+  // Additional GL events (when available)
+  try {
+    gl.on?.('itemDropped', () => saver.schedule());
+    gl.on?.('itemCreated', () => saver.schedule());
+    gl.on?.('itemDestroyed', () => saver.schedule());
+  } catch {
+    // ignore
   }
 
   gl.registerComponentFactoryFunction('view', (container, componentState) => {
@@ -422,23 +538,22 @@ export async function initDockLayout({ viewEls }) {
   // 2. NO PRUNING LOGIC HERE. 
   // We just save the state. Golden Layout handles stack destruction automatically.
   gl.on('stateChanged', () => {
-    try {
-      if (gl.isInitialised) {
-        const next = typeof gl.saveLayout === 'function'
-          ? gl.saveLayout()
-          : (typeof gl.toConfig === 'function' ? gl.toConfig() : null);
-        if (next) saveDockLayout(next);
-      }
-    } catch {
-      // ignore
-    }
-
-    try {
-      suppressDockTabTooltips(rootEl);
-    } catch {
-      // ignore
-    }
+    saver.schedule();
   });
+
+  try {
+    window.addEventListener('beforeunload', () => saver.flush());
+  } catch {
+    // ignore
+  }
+
+  try {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') saver.flush();
+    });
+  } catch {
+    // ignore
+  }
 
   const tryLoad = (cfg) => {
     if (typeof gl.loadLayout !== 'function') {
@@ -451,7 +566,6 @@ export async function initDockLayout({ viewEls }) {
   try {
     tryLoad(cfgOrThrow(config));
   } catch (e) {
-    clearSavedDockLayout();
     try {
       tryLoad(cfgOrThrow(defaultConfig));
     } catch (e2) {
@@ -464,11 +578,31 @@ export async function initDockLayout({ viewEls }) {
     return v;
   }
 
-  await new Promise((r) => requestAnimationFrame(() => r()));
-  const hasContent = rootEl.querySelector('.lm_content') || rootEl.querySelector('.lm_item');
-  if (!hasContent) {
-    clearSavedDockLayout();
-    return { ok: false, reason: 'empty-layout' };
+  // On reload (Ctrl+R), GoldenLayout may take a moment to attach its DOM.
+  // A single RAF check can falsely report an "empty" layout and wipe the saved config.
+  // Wait a short time window before concluding the dock is empty.
+  const waitForDockContent = async () => {
+    const maxFrames = 25;
+    for (let i = 0; i < maxFrames; i++) {
+      await new Promise((r) => requestAnimationFrame(() => r()));
+      const hasContent = rootEl.querySelector('.lm_content') || rootEl.querySelector('.lm_item');
+      if (hasContent) return true;
+    }
+    return false;
+  };
+
+  const hasContent = await waitForDockContent();
+  void hasContent;
+
+  // On first run (no saved layout), persist the default layout after the dock has settled.
+  // Avoid saving immediately when a saved layout exists, otherwise we can overwrite it
+  // with an intermediate/default state during initialization.
+  if (!hadSaved) {
+    try {
+      window.setTimeout(() => saver.flush(), 500);
+    } catch {
+      // ignore
+    }
   }
 
   return { ok: true, gl };
