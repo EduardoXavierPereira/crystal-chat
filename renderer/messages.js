@@ -110,6 +110,41 @@ export function updateRenderedMessage({ els, msg, messageIndex } = {}) {
   const root = els.messagesEl.querySelector(`.message[data-message-index="${messageIndex}"]`);
   if (!root) return false;
 
+  const ensureSectionOrder = (key) => {
+    if (!msg) return;
+    if (!Array.isArray(msg._sectionOrder)) msg._sectionOrder = [];
+    if (!msg._sectionOrder.includes(key)) msg._sectionOrder.push(key);
+  };
+
+  const removeSectionOrder = (key) => {
+    if (!Array.isArray(msg._sectionOrder)) return;
+    msg._sectionOrder = msg._sectionOrder.filter((k) => k !== key);
+  };
+
+  const reorderSections = () => {
+    const header = root.querySelector('.message-header');
+    if (!header) return;
+
+    const nodesByKey = {
+      thinking: root.querySelector('.thinking'),
+      memories: root.querySelector('.memories-retrieved')
+    };
+
+    const order = Array.isArray(msg._sectionOrder) && msg._sectionOrder.length
+      ? msg._sectionOrder
+      : ['thinking', 'memories'];
+
+    let insertAfter = header;
+    order.forEach((k) => {
+      const n = nodesByKey[k];
+      if (!n) return;
+      if (insertAfter.nextSibling !== n) {
+        root.insertBefore(n, insertAfter.nextSibling);
+      }
+      insertAfter = n;
+    });
+  };
+
   // Update assistant content
   const contentEl = root.querySelector('.message-content');
   if (contentEl) {
@@ -126,6 +161,7 @@ export function updateRenderedMessage({ els, msg, messageIndex } = {}) {
 
   if (!shouldHaveThinking) {
     if (thinkingWrap) thinkingWrap.remove();
+    removeSectionOrder('thinking');
   }
 
   let wrap = thinkingWrap;
@@ -134,6 +170,7 @@ export function updateRenderedMessage({ els, msg, messageIndex } = {}) {
   }
 
   if (!wrap && shouldHaveThinking) {
+    ensureSectionOrder('thinking');
     wrap = document.createElement('div');
     wrap.className = 'thinking';
 
@@ -182,12 +219,7 @@ export function updateRenderedMessage({ els, msg, messageIndex } = {}) {
     wrap.appendChild(toggle);
     wrap.appendChild(body);
 
-    const header = root.querySelector('.message-header');
-    if (header && header.nextSibling) {
-      root.insertBefore(wrap, header.nextSibling);
-    } else {
-      root.insertBefore(wrap, root.firstChild);
-    }
+    root.appendChild(wrap);
   }
 
   if (!wrap) {
@@ -212,11 +244,14 @@ export function updateRenderedMessage({ els, msg, messageIndex } = {}) {
 
   if (!shouldHaveRetrieved) {
     if (memoriesWrap) memoriesWrap.remove();
+    removeSectionOrder('memories');
+    reorderSections();
     return true;
   }
 
   let mwrap = memoriesWrap;
   if (!mwrap) {
+    ensureSectionOrder('memories');
     mwrap = document.createElement('div');
     mwrap.className = 'memories-retrieved';
 
@@ -266,12 +301,7 @@ export function updateRenderedMessage({ els, msg, messageIndex } = {}) {
     mwrap.appendChild(mtoggle);
     mwrap.appendChild(mbody);
 
-    const insertAfter = wrap || root.querySelector('.message-header');
-    if (insertAfter && insertAfter.nextSibling) {
-      root.insertBefore(mwrap, insertAfter.nextSibling);
-    } else {
-      root.insertBefore(mwrap, root.firstChild);
-    }
+    root.appendChild(mwrap);
   }
 
   const mbody = mwrap.querySelector('.thinking-body');
@@ -299,6 +329,8 @@ export function updateRenderedMessage({ els, msg, messageIndex } = {}) {
       });
     });
   }
+
+  reorderSections();
 
   return true;
 }
@@ -540,7 +572,79 @@ export function renderMessageElement(
   }
 
   div.appendChild(header);
+
+  const reorderSections = () => {
+    const headerEl = div.querySelector('.message-header');
+    if (!headerEl) return;
+
+    const nodesByKey = {
+      thinking: div.querySelector('.thinking'),
+      memories: div.querySelector('.memories-retrieved')
+    };
+
+    const order = Array.isArray(msg?._sectionOrder) && msg._sectionOrder.length
+      ? msg._sectionOrder
+      : ['thinking', 'memories'];
+
+    let insertAfter = headerEl;
+    order.forEach((k) => {
+      const n = nodesByKey[k];
+      if (!n) return;
+      if (insertAfter.nextSibling !== n) {
+        div.insertBefore(n, insertAfter.nextSibling);
+      }
+      insertAfter = n;
+    });
+  };
+
+  if (msg.role === 'user') {
+    const hasImages = Array.isArray(msg.images) && msg.images.length > 0;
+    const hasFile = !!(msg.textFile && typeof msg.textFile === 'object');
+    if (hasImages || hasFile) {
+      const attach = document.createElement('div');
+      attach.className = 'message-attachments';
+
+      if (hasImages) {
+        msg.images.forEach((img) => {
+          const s = (img || '').toString();
+          if (!s) return;
+          const el = document.createElement('img');
+          el.className = 'message-attachment-thumb';
+          el.alt = 'Attached image';
+          el.src = s.startsWith('data:') ? s : `data:image/*;base64,${s}`;
+          el.loading = 'lazy';
+          el.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            try {
+              window.open(el.src);
+            } catch {
+              // ignore
+            }
+          };
+          attach.appendChild(el);
+        });
+      }
+
+      if (hasFile) {
+        const chip = document.createElement('div');
+        chip.className = 'message-attachment-file';
+        const name = (msg.textFile?.name || 'file').toString();
+        const size = typeof msg.textFile?.size === 'number' ? msg.textFile.size : 0;
+        const sizeLabel = size > 0
+          ? (size < 1024 ? `${size} B` : `${Math.max(1, Math.ceil(size / 1024))} KB`)
+          : '';
+        chip.textContent = sizeLabel ? `File: ${name} (${sizeLabel})` : `File: ${name}`;
+        attach.appendChild(chip);
+      }
+
+      div.appendChild(attach);
+    }
+  }
+
   if (msg.role === 'assistant' && Array.isArray(msg._retrievedMemories) && msg._retrievedMemories.length > 0) {
+    if (!Array.isArray(msg._sectionOrder)) msg._sectionOrder = [];
+    if (!msg._sectionOrder.includes('memories')) msg._sectionOrder.push('memories');
     const memWrap = document.createElement('div');
     memWrap.className = 'memories-retrieved';
 
@@ -613,6 +717,8 @@ export function renderMessageElement(
   }
 
   if (msg.role === 'assistant' && (msg.thinking || msg._thinkingActive)) {
+    if (!Array.isArray(msg._sectionOrder)) msg._sectionOrder = [];
+    if (!msg._sectionOrder.includes('thinking')) msg._sectionOrder.push('thinking');
     const thinkingWrap = document.createElement('div');
     thinkingWrap.className = 'thinking';
 
@@ -663,6 +769,8 @@ export function renderMessageElement(
     div.appendChild(thinkingWrap);
   }
   div.appendChild(content);
+
+  reorderSections();
 
   if (msg.role === 'user') {
     const actions = document.createElement('div');

@@ -1,10 +1,10 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { spawn } = require('child_process');
 const http = require('http');
 const https = require('https');
 const os = require('os');
-const fs = require('fs');
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -837,4 +837,76 @@ ipcMain.handle('tools:openLink', async (_evt, { url }) => {
     maxBytes: typeof res.maxBytes === 'number' ? res.maxBytes : undefined,
     text: text.slice(0, 12000)
   };
+});
+
+ipcMain.handle('tools:readLocalFile', async (_evt, { path: p }) => {
+  const raw = (p || '').toString().trim();
+  if (!raw) return { ok: false, error: 'missing_path' };
+
+  let filePath = raw;
+  try {
+    if (raw.startsWith('file://')) {
+      const u = new URL(raw);
+      if (u.protocol !== 'file:') return { ok: false, error: 'unsupported_protocol' };
+      filePath = decodeURIComponent(u.pathname || '');
+      // On Windows this would need extra handling, but this app targets linux primarily.
+    }
+  } catch {
+    // ignore
+  }
+
+  filePath = filePath.replace(/\r?\n/g, '').trim();
+  if (!filePath) return { ok: false, error: 'invalid_path' };
+
+  let st;
+  try {
+    st = fs.statSync(filePath);
+  } catch {
+    return { ok: false, error: 'not_found' };
+  }
+  if (!st.isFile()) return { ok: false, error: 'not_a_file' };
+
+  const name = path.basename(filePath);
+  const size = typeof st.size === 'number' ? st.size : 0;
+  const ext = (path.extname(name) || '').toLowerCase();
+
+  const isImage = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp'].includes(ext);
+  const isText = ['.txt', '.md', '.json', '.csv', '.js', '.ts', '.py', '.html', '.css', '.yaml', '.yml'].includes(ext);
+
+  const capTextChars = 200000;
+  const capBinaryBytes = 10 * 1024 * 1024;
+
+  if (isImage) {
+    if (size > capBinaryBytes) return { ok: false, error: 'too_large' };
+    let buf;
+    try {
+      buf = fs.readFileSync(filePath);
+    } catch {
+      return { ok: false, error: 'read_failed' };
+    }
+    const base64 = buf.toString('base64');
+    const mimeByExt = {
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.gif': 'image/gif',
+      '.webp': 'image/webp',
+      '.bmp': 'image/bmp'
+    };
+    const type = mimeByExt[ext] || 'image/*';
+    return { ok: true, kind: 'image', name, size, type, base64 };
+  }
+
+  if (isText || !ext) {
+    let txt;
+    try {
+      txt = fs.readFileSync(filePath, 'utf8');
+    } catch {
+      return { ok: false, error: 'read_failed' };
+    }
+    const clipped = txt.length > capTextChars ? `${txt.slice(0, capTextChars)}\n\n[...truncated...]` : txt;
+    return { ok: true, kind: 'text', name, size, type: 'text/plain', text: clipped };
+  }
+
+  return { ok: false, error: 'unsupported_file_type' };
 });

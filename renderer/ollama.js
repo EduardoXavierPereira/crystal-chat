@@ -7,7 +7,19 @@ export async function streamChat({ apiUrl, model, temperature, messages, onToken
       model,
       keep_alive: 0,
       options: Number.isFinite(temperature) ? { temperature } : undefined,
-      messages: messages.map(({ role, content }) => ({ role, content })),
+      messages: messages.map(({ role, content, images }) => ({
+        role,
+        content,
+        images: Array.isArray(images) && images.length
+          ? images
+            .map((x) => (x || '').toString())
+            .map((s) => {
+              const idx = s.indexOf('base64,');
+              return idx >= 0 ? s.slice(idx + 'base64,'.length) : s;
+            })
+            .filter(Boolean)
+          : undefined
+      })),
       stream: true
     })
   });

@@ -1494,6 +1494,33 @@ html[data-theme="light"] #new-chat.button-ghost:not(.active):hover {
   white-space: pre-wrap;
 }
 
+.message-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 8px 0 0 0;
+}
+
+.message-attachment-thumb {
+  width: 84px;
+  height: 84px;
+  border-radius: 14px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  cursor: pointer;
+}
+
+.message-attachment-file {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
 .message.assistant .message-content {
   line-height: 1.45;
 }
@@ -1661,6 +1688,66 @@ html[data-theme="light"] #new-chat.button-ghost:not(.active):hover {
   z-index: 20;
 }
 
+.prompt-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.prompt-attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  max-width: min(520px, calc(100vw - 60px));
+}
+
+.prompt-attachment-title {
+  font-size: 0.9rem;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 360px;
+}
+
+.prompt-attachment-meta {
+  font-size: 0.85rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.prompt-attachment-remove {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.prompt-attachment-remove:hover {
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.prompt-attachment-thumb {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
 .input-shell {
   position: relative;
   display: flex;
@@ -1693,6 +1780,69 @@ html[data-theme="light"] #new-chat.button-ghost:not(.active):hover {
   align-items: center;
   justify-content: center;
   cursor: pointer;
+}
+
+.prompt-insert-btn {
+  margin-left: 8px;
+}
+
+.prompt-insert-plus {
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 600;
+  transform: translateY(-1px);
+}
+
+.prompt-insert-btn.has-attachment {
+  position: relative;
+}
+
+.prompt-insert-btn.has-attachment::after {
+  display: none;
+}
+
+.prompt-insert-popover {
+  position: absolute;
+  left: 42px;
+  bottom: calc(100% + 10px);
+  width: 220px;
+  max-width: min(220px, calc(100vw - 36px));
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
+  z-index: 20;
+}
+
+.prompt-insert-item {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  padding: 9px 10px;
+  text-align: left;
+  font-family: var(--sans);
+  font-size: 0.95rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.prompt-insert-item-icon {
+  display: block;
+  flex: 0 0 auto;
+  opacity: 0.95;
+}
+
+.prompt-insert-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .prompt-tools-btn:hover {

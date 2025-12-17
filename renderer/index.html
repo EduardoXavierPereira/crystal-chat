@@ -133,8 +133,9 @@
             <span id="typing-indicator-label">Waiting for response...</span>
           </div>
         </section>
-          <div id="error" class="error hidden"></div>
           <form id="prompt-form" class="prompt-form">
+          <div id="error" class="error hidden"></div>
+          <div id="prompt-attachments" class="prompt-attachments hidden" aria-label="Attachments"></div>
           <div class="input-shell">
             <div class="prompt-tools">
               <button id="prompt-tools-btn" type="button" class="prompt-tools-btn" aria-label="Chat settings" aria-haspopup="dialog" aria-expanded="false">
@@ -142,6 +143,34 @@
                   <path d="M12 5.5C12 6.88071 10.8807 8 9.5 8C8.11929 8 7 6.88071 7 5.5M12 5.5C12 4.11929 10.8807 3 9.5 3C8.11929 3 7 4.11929 7 5.5M12 5.5H21M7 5.5H3M19 12C19 13.3807 17.8807 14.5 16.5 14.5C15.1193 14.5 14 13.3807 14 12M19 12C19 10.6193 17.8807 9.5 16.5 9.5C15.1193 9.5 14 10.6193 14 12M19 12H21M14 12H3M10 18.5C10 19.8807 8.88071 21 7.5 21C6.11929 21 5 19.88071 5 18.5M10 18.5C10 17.1193 8.88071 16 7.5 16C6.11929 16 5 17.1193 5 18.5M10 18.5H21M5 18.5H3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
               </button>
+
+              <button id="prompt-insert-btn" type="button" class="prompt-tools-btn prompt-insert-btn" aria-label="Insert" aria-haspopup="dialog" aria-expanded="false">
+                <span class="prompt-insert-plus" aria-hidden="true">+</span>
+              </button>
+
+              <div id="prompt-insert-popover" class="prompt-insert-popover hidden" role="dialog" aria-label="Insert">
+                <button id="prompt-insert-text-btn" type="button" class="prompt-insert-item">
+                  <svg class="prompt-insert-item-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <path d="M8 3h8l4 4v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                    <path d="M16 3v4h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M9 13h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    <path d="M9 17h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  </svg>
+                  <span>Insert text file</span>
+                </button>
+                <button id="prompt-insert-image-btn" type="button" class="prompt-insert-item">
+                  <svg class="prompt-insert-item-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" stroke-width="2"/>
+                    <path d="M7 15l3-3 3 3 2-2 3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M9 10h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                  </svg>
+                  <span>Insert image</span>
+                </button>
+              </div>
+
+              <input id="prompt-insert-text-input" class="hidden" type="file" accept="text/*,.md,.txt,.json,.csv,.js,.ts,.py,.html,.css,.yaml,.yml" />
+              <input id="prompt-insert-image-input" class="hidden" type="file" accept="image/*" />
+
               <div id="prompt-tools-popover" class="prompt-tools-popover hidden" role="dialog" aria-label="Chat settings">
                 <div class="prompt-tools-row">
                   <label class="prompt-tools-label" for="model-select">Model</label>

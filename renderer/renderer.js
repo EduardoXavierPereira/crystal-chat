@@ -42,6 +42,24 @@ let runtimeApiUrl = null;
 
 let db;
 
+function clearPendingImage() {
+  state.pendingImage = null;
+  state.pendingTextFile = null;
+  els.promptInsertBtn?.classList.remove('has-attachment');
+  if (els.promptAttachmentsEl) {
+    els.promptAttachmentsEl.innerHTML = '';
+    els.promptAttachmentsEl.classList.add('hidden');
+  }
+}
+
+function getPendingImage() {
+  return state?.pendingImage || null;
+}
+
+function getPendingTextFile() {
+  return state?.pendingTextFile || null;
+}
+
 let initCompleted = false;
 let setupSucceeded = false;
 
@@ -607,6 +625,7 @@ async function continueInitAfterSetup() {
   state.updateMemoryEnabled = typeof ui?.updateMemoryEnabled === 'boolean' ? ui.updateMemoryEnabled : state.updateMemoryEnabled;
   state.theme = (ui?.theme || state.theme || 'system').toString();
   state.accent = (ui?.accent || state.accent || '#7fc9ff').toString();
+  clearPendingImage();
   applyThemeAndAccent(state);
 
   if (els.modelDropdownEl) {
@@ -834,7 +853,10 @@ async function continueInitAfterSetup() {
     chatTitleFromMessages,
     renderActiveChatUI,
     renderChatsUI,
-    streamAssistant
+    streamAssistant,
+    getPendingImage,
+    getPendingTextFile,
+    clearPendingImage
   });
 
   attachUIBindings({

@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   ollamaHasModel: (model) => ipcRenderer.invoke('ollama:hasModel', { model }),
   ollamaPullModel: (model) => ipcRenderer.invoke('ollama:pullModel', { model }),
   ollamaGetApiUrl: () => ipcRenderer.invoke('ollama:getApiUrl'),
+  readLocalFile: (path) => ipcRenderer.invoke('tools:readLocalFile', { path }),
   webSearch: (query) => ipcRenderer.invoke('tools:webSearch', { query }),
   openLink: (url) => ipcRenderer.invoke('tools:openLink', { url }),
   onOllamaSetupProgress: (callback) => {

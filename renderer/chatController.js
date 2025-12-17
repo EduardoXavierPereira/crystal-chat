@@ -12,7 +12,10 @@ export function createChatController({
   chatTitleFromMessages,
   renderActiveChatUI,
   renderChatsUI,
-  streamAssistant
+  streamAssistant,
+  getPendingImage,
+  getPendingTextFile,
+  clearPendingImage
 }) {
   function ensureChatStructure(chat) {
     if (!chat || typeof chat !== 'object') return;
@@ -121,8 +124,19 @@ export function createChatController({
     if (state.isStreaming) return;
     if (state.sidebarSelection.kind !== 'chat') return;
 
-    const content = els.promptInput.value.trim();
-    if (!content) return;
+    const pendingImage = getPendingImage?.() || null;
+    const pendingTextFile = getPendingTextFile?.() || null;
+
+    const rawContent = (els.promptInput.value || '').toString();
+    const content = rawContent.trim();
+    if (!content && !pendingImage && !pendingTextFile) return;
+
+    let finalContent = content;
+    if (pendingTextFile && pendingTextFile.text) {
+      const name = (pendingTextFile.name || 'file').toString();
+      const block = `[File: ${name}]\n${(pendingTextFile.text || '').toString()}`;
+      finalContent = finalContent ? `${finalContent}\n\n${block}` : block;
+    }
 
     hideError(els.errorEl);
     els.promptInput.value = '';
@@ -157,8 +171,24 @@ export function createChatController({
 
     ensureChatStructure(chat);
 
-    const userMsg = { id: crypto.randomUUID(), role: 'user', content, createdAt: Date.now() };
+    const userMsg = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: finalContent,
+      images: pendingImage?.previewUrl ? [pendingImage.previewUrl] : (pendingImage?.base64 ? [`data:image/*;base64,${pendingImage.base64}`] : undefined),
+      textFile: pendingTextFile
+        ? {
+            name: (pendingTextFile.name || 'file').toString(),
+            size: typeof pendingTextFile.size === 'number' ? pendingTextFile.size : 0
+          }
+        : undefined,
+      createdAt: Date.now()
+    };
     chat.messages.push(userMsg);
+
+    if (pendingImage || pendingTextFile) {
+      clearPendingImage?.();
+    }
     if (chat.id !== tempChatId) {
       await saveChat(db, chat);
     }
