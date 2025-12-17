@@ -1783,7 +1783,7 @@ html[data-theme="light"] #new-chat.button-ghost:not(.active):hover {
 }
 
 .prompt-insert-btn {
-  margin-left: 8px;
+  margin-right: 8px;
 }
 
 .prompt-insert-plus {
@@ -1803,7 +1803,7 @@ html[data-theme="light"] #new-chat.button-ghost:not(.active):hover {
 
 .prompt-insert-popover {
   position: absolute;
-  left: 42px;
+  left: 0;
   bottom: calc(100% + 10px);
   width: 220px;
   max-width: min(220px, calc(100vw - 36px));
@@ -1856,11 +1856,11 @@ html[data-theme="light"] #new-chat.button-ghost:not(.active):hover {
 
 .prompt-tools-popover {
   position: absolute;
-  left: 0;
+  left: 42px;
   bottom: calc(100% + 10px);
-  width: 420px;
-  max-width: min(420px, calc(100vw - 36px));
-  background: var(--surface);
+  width: 320px;
+  max-width: min(320px, calc(100vw - 36px));
+  background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 10px;

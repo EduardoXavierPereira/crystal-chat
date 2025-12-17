@@ -360,9 +360,7 @@ export function createStreamingController({
       s += '{"tool":"open_link","args":{"url":"https://..."}}\n';
       s += 'After a tool result is provided, you will be called again and should either call another tool (same JSON format) or respond normally.\n';
       s += 'When you respond normally after tools, DO NOT dump raw tool JSON or a bare link list.\n';
-      s += 'Instead: write a short synthesized answer, then include a Sources section with numbered citations that map to the search results URLs.\n';
-      s += 'If the user asked for recent/news-style info, summarize the main themes and list the most relevant sources; only open_link if you need details from a specific source.\n';
-      s += 'Citations format example: "Sources: [1] Title - https://..." and refer inline like "... (see [1])".\n';
+      s += 'Instead: write a short synthesized answer.\n';
       s += 'Rules:\n';
       s += '- Only call tools that are enabled when they\'re useful.\n';
       s += '- Keep queries concise.\n';

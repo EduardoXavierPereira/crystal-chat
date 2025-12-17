@@ -803,7 +803,7 @@ async function continueInitAfterSetup() {
     embeddingModel: DEFAULT_EMBEDDING_MODEL,
     memoryTopK: 6,
     memoryCandidateK: 80,
-    memoryMinScore: 0.1,
+    memoryMinScore: 0.25,
     memoryRetentionMs: 30 * 24 * 60 * 60 * 1000,
     memoryMaxChars: 2000,
     updateRenderedMessage,

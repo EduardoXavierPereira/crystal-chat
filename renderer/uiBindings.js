@@ -477,7 +477,6 @@ export function attachUIBindings({
     (e) => {
       e.preventDefault();
       e.stopPropagation();
-      togglePromptInsertPopover();
     },
     { signal: bindingsAbort.signal }
   );
