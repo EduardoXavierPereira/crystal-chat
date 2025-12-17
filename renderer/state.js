@@ -18,6 +18,8 @@ export function createInitialState() {
     chatQuery: '',
     trashQuery: '',
     memoriesQuery: '',
+    theme: 'dark',
+    accent: '#7fc9ff',
     confirmAction: null,
     temporaryChatEnabled: false,
     tempChat: null,
@@ -46,6 +48,8 @@ export function saveUIState(state) {
       systemPrompt: (state.systemPrompt || '').toString(),
       enableInternet: !!state.enableInternet,
       updateMemoryEnabled: typeof state.updateMemoryEnabled === 'boolean' ? state.updateMemoryEnabled : true,
+      theme: (state.theme || 'dark').toString(),
+      accent: (state.accent || '#7fc9ff').toString(),
       sidebarSelection:
         state.sidebarSelection.kind === 'chat' && state.sidebarSelection.id === TEMP_CHAT_ID
           ? { kind: 'chat', id: null }
@@ -69,6 +73,12 @@ export function loadUIState() {
       if (typeof parsed.updateMemoryEnabled === 'undefined') {
         parsed.updateMemoryEnabled = true;
       }
+      if (typeof parsed.theme === 'undefined') {
+        parsed.theme = 'dark';
+      }
+      if (typeof parsed.accent === 'undefined') {
+        parsed.accent = '#7fc9ff';
+      }
     }
     return parsed;
   } catch {
@@ -81,6 +91,9 @@ export function setSidebarSelection(state, next) {
   if (next.kind === 'trash' || next.kind === 'memories') {
     state.pendingNew = false;
     state.renamingId = null;
+  }
+  if (next.kind === 'chat' && next.id !== null && next.id !== TEMP_CHAT_ID) {
+    state.pendingNew = false;
   }
   if (next.kind !== 'chat' || next.id !== TEMP_CHAT_ID) {
     state.temporaryChatEnabled = false;

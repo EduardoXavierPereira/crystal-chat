@@ -1,4 +1,5 @@
-const LAYOUT_KEY = 'crystal-chat:layout-v1';
+const LAYOUT_KEY = 'crystal-chat:layout-v2';
+const LEGACY_LAYOUT_KEY = 'crystal-chat:layout-v1';
 
 function safeParseJson(raw) {
   try {
@@ -60,6 +61,7 @@ function extractLayoutRoot(config) {
 export function clearSavedDockLayout() {
   try {
     localStorage.removeItem(LAYOUT_KEY);
+    localStorage.removeItem(LEGACY_LAYOUT_KEY);
   } catch {
     // ignore
   }
@@ -67,8 +69,22 @@ export function clearSavedDockLayout() {
 
 export function loadSavedDockLayout() {
   const parsed = safeParseJson(localStorage.getItem(LAYOUT_KEY));
-  if (!isLayoutConfigLike(parsed)) return null;
-  return parsed;
+  if (isLayoutConfigLike(parsed)) return parsed;
+
+  // Migrate legacy layouts forward.
+  const legacy = safeParseJson(localStorage.getItem(LEGACY_LAYOUT_KEY));
+  if (!isLayoutConfigLike(legacy)) return null;
+  try {
+    const migrated = normalizeLayoutConfig(legacy);
+    const raw = safeStringifyJson(migrated);
+    if (raw) {
+      localStorage.setItem(LAYOUT_KEY, raw);
+      localStorage.removeItem(LEGACY_LAYOUT_KEY);
+    }
+  } catch {
+    // ignore
+  }
+  return legacy;
 }
 
 export function saveDockLayout(config) {
@@ -125,6 +141,13 @@ function getDefaultLayoutConfig() {
                 componentType: 'view',
                 title: 'History',
                 componentState: { viewId: 'sidebar' },
+                isClosable: true
+              },
+              {
+                type: 'component',
+                componentType: 'view',
+                title: 'Settings',
+                componentState: { viewId: 'settings' },
                 isClosable: true
               },
               {
@@ -202,6 +225,34 @@ function wrapComponentItemsInStack(item, parentType = null) {
   return next;
 }
 
+function ensureSettingsInSidebarStack(item) {
+  if (!item || typeof item !== 'object') return;
+
+  if (item.type === 'stack' && Array.isArray(item.content)) {
+    const content = item.content;
+    const hasSidebar = content.some((c) => c?.type === 'component' && c?.componentState?.viewId === 'sidebar');
+    if (hasSidebar) {
+      const hasSettings = content.some((c) => c?.type === 'component' && c?.componentState?.viewId === 'settings');
+      if (!hasSettings) {
+        const insertAfter = content.findIndex((c) => c?.type === 'component' && c?.componentState?.viewId === 'sidebar');
+        const settingsComp = {
+          type: 'component',
+          componentType: 'view',
+          title: 'Settings',
+          componentState: { viewId: 'settings' },
+          isClosable: true
+        };
+        const idx = insertAfter >= 0 ? insertAfter + 1 : 0;
+        content.splice(idx, 0, settingsComp);
+      }
+    }
+  }
+
+  if (Array.isArray(item.content)) {
+    item.content.forEach((c) => ensureSettingsInSidebarStack(c));
+  }
+}
+
 function sanitizeItemConfig(item) {
   if (!item || typeof item !== 'object') return item;
   const t = item.type;
@@ -247,6 +298,7 @@ function normalizeLayoutConfig(config) {
   }
   if (next.root) {
     next.root = sanitizeItemConfig(wrapComponentItemsInStack(next.root, null));
+    ensureSettingsInSidebarStack(next.root);
     enforceSidebarStackWidth(next.root, 33);
   }
   return next;

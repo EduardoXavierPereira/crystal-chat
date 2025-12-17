@@ -69,6 +69,21 @@ function getViewElById(viewId) {
   return document.querySelector(`[data-view-id="${viewId}"]`);
 }
 
+function applyThemeAndAccent(state) {
+  try {
+    const theme = (state?.theme || 'dark').toString();
+    document.documentElement.dataset.theme = theme;
+  } catch {
+    // ignore
+  }
+  try {
+    const accent = (state?.accent || '#7fc9ff').toString();
+    document.documentElement.style.setProperty('--accent', accent);
+  } catch {
+    // ignore
+  }
+}
+
 function createMagneticScrollController({ els, state }) {
   let engaged = false;
   let upImpulse = 0;
@@ -529,6 +544,7 @@ async function continueInitAfterSetup() {
       viewEls: {
         sidebar: getViewElById('sidebar'),
         chat: getViewElById('chat'),
+        settings: getViewElById('settings'),
         memories: getViewElById('memories'),
         trash: getViewElById('trash')
       }
@@ -580,6 +596,9 @@ async function continueInitAfterSetup() {
   state.systemPrompt = (ui?.systemPrompt ?? state.systemPrompt ?? '').toString();
   state.enableInternet = !!ui?.enableInternet;
   state.updateMemoryEnabled = typeof ui?.updateMemoryEnabled === 'boolean' ? ui.updateMemoryEnabled : state.updateMemoryEnabled;
+  state.theme = (ui?.theme || state.theme || 'dark').toString();
+  state.accent = (ui?.accent || state.accent || '#7fc9ff').toString();
+  applyThemeAndAccent(state);
 
   if (els.modelDropdownEl) {
     modelDropdown?.destroy?.();
@@ -703,6 +722,8 @@ async function continueInitAfterSetup() {
   } else {
     state.sidebarSelection = { kind: 'chat', id: null };
   }
+
+  state.pendingNew = state.sidebarSelection.kind === 'chat' && state.sidebarSelection.id === null;
   pinnedActions = createPinnedActions({
     db,
     els,

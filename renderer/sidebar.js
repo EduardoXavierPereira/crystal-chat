@@ -22,6 +22,10 @@ export function getEls() {
     systemPromptInput: document.getElementById('system-prompt'),
     enableInternetToggleEl: document.getElementById('enable-internet-toggle'),
     updateMemoryToggleEl: document.getElementById('update-memory-toggle'),
+    themeSegmentEl: document.getElementById('theme-segment'),
+    themeDarkBtn: document.getElementById('theme-dark-btn'),
+    themeLightBtn: document.getElementById('theme-light-btn'),
+    accentSwatchesEl: document.getElementById('accent-swatches'),
     modelInstallEl: document.getElementById('model-install'),
     modelInstallLabelEl: document.getElementById('model-install-label'),
     modelInstallPercentEl: document.getElementById('model-install-percent'),
@@ -49,6 +53,10 @@ export function getEls() {
     confirmMessageEl: document.getElementById('confirm-message'),
     confirmCancelBtn: document.getElementById('confirm-cancel'),
     confirmOkBtn: document.getElementById('confirm-ok'),
+    memoryEditModalEl: document.getElementById('memory-edit-modal'),
+    memoryEditInputEl: document.getElementById('memory-edit-input'),
+    memoryEditCancelBtn: document.getElementById('memory-edit-cancel'),
+    memoryEditSaveBtn: document.getElementById('memory-edit-save'),
     setupModalEl: document.getElementById('setup-modal'),
     setupMessageEl: document.getElementById('setup-message'),
     setupProgressLabelEl: document.getElementById('setup-progress-label'),
@@ -81,7 +89,7 @@ export function chatTitleFromMessages(chat) {
   const firstUser = msgs.find((m) => m.role === 'user');
   if (!firstUser) return 'Conversation';
   const trimmed = firstUser.content.trim().replace(/\s+/g, ' ');
-  return trimmed.slice(0, 32) + (trimmed.length > 32 ? '…' : '');
+  return trimmed;
 }
 
 function escapeHtml(text) {
@@ -109,6 +117,7 @@ function escapeRegExp(text) {
 
 export function renderChats({ els, state, onSetActiveChat, onStartRename, onTrashChat, onTogglePinned }) {
   els.chatListEl.innerHTML = '';
+  els.newChatBtn?.classList.toggle('active', state.sidebarSelection.kind === 'chat' && state.sidebarSelection.id === null && !!state.pendingNew);
   els.pinnedBtn?.classList.toggle('active', !!state.pinnedOpen);
   els.pinnedBtn?.classList.toggle('open', !!state.pinnedOpen);
 

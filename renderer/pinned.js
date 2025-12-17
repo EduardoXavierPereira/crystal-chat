@@ -1,6 +1,6 @@
 import { chatTitleFromMessages } from './sidebar.js';
 
-export function renderPinnedDropdown({ els, pinnedChats, onOpenChat }) {
+export function renderPinnedDropdown({ els, pinnedChats, activeChatId, onOpenChat }) {
   if (!els.pinnedDropdownListEl) return;
   els.pinnedDropdownListEl.innerHTML = '';
 
@@ -14,7 +14,7 @@ export function renderPinnedDropdown({ els, pinnedChats, onOpenChat }) {
 
   pinnedChats.forEach((chat) => {
     const row = document.createElement('div');
-    row.className = 'pinned-dropdown-item';
+    row.className = `pinned-dropdown-item ${chat.id === activeChatId ? 'active' : ''}`;
     row.onclick = () => onOpenChat(chat.id);
 
     const name = document.createElement('div');

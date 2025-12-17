@@ -1,5 +1,5 @@
 import { renderMemories } from './memoriesView.js';
-import { addMemory } from './memories.js';
+import { addMemory, getMemoryDisplayParts, updateMemory } from './memories.js';
 
 function loadAllMemories(db) {
   return new Promise((resolve, reject) => {
@@ -30,13 +30,53 @@ export function createMemoriesActions({
   embeddingModel,
   showError
 }) {
+  let editingId = null;
+
+  const closeMemoryEditModal = () => {
+    editingId = null;
+    els.memoryEditModalEl?.classList.add('hidden');
+  };
+
+  const openMemoryEditModal = ({ id, text }) => {
+    if (!els.memoryEditModalEl || !els.memoryEditInputEl) return false;
+    editingId = id;
+    els.memoryEditInputEl.value = (text || '').toString();
+    els.memoryEditModalEl.classList.remove('hidden');
+    requestAnimationFrame(() => els.memoryEditInputEl?.focus());
+    return true;
+  };
+
+  const ensureMemoryEditModalBindings = (() => {
+    let wired = false;
+    return () => {
+      if (wired) return;
+      wired = true;
+
+      els.memoryEditCancelBtn?.addEventListener('click', () => {
+        closeMemoryEditModal();
+      });
+
+      els.memoryEditModalEl?.addEventListener('click', (e) => {
+        if (e.target === els.memoryEditModalEl) closeMemoryEditModal();
+      });
+
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && els.memoryEditModalEl && !els.memoryEditModalEl.classList.contains('hidden')) {
+          e.preventDefault();
+          closeMemoryEditModal();
+        }
+      });
+    };
+  })();
+
   async function renderMemoriesUI() {
     const all = await loadAllMemories(db);
     renderMemories({
       els,
       memories: all,
       query: state.memoriesQuery,
-      onDelete: deleteMemoryPermanently
+      onDelete: deleteMemoryPermanently,
+      onEdit: editMemory
     });
   }
 
@@ -48,6 +88,62 @@ export function createMemoriesActions({
       window.dispatchEvent(new CustomEvent('cc:memoriesChanged', { detail: { reason: 'delete' } }));
     } catch {
       // ignore
+    }
+  }
+
+  async function editMemory(memory) {
+    const id = memory?.id;
+    if (!id) return;
+
+    const parts = getMemoryDisplayParts?.(memory) || { text: (memory?.text || '').toString() };
+    const currentText = (parts.text || '').toString();
+
+    ensureMemoryEditModalBindings();
+    const opened = openMemoryEditModal({ id, text: currentText });
+    if (!opened) return;
+
+    const save = async () => {
+      const liveId = editingId;
+      if (!liveId) return;
+      const nextText = (els.memoryEditInputEl?.value || '').toString().trim();
+      if (!nextText) return;
+
+      const apiUrl = getApiUrl() || 'http://localhost:11435/api/chat';
+      const model = (embeddingModel || '').toString().trim();
+      if (!embedText || !model) return;
+
+      try {
+        els.memoryEditSaveBtn?.setAttribute('disabled', 'true');
+        const emb = await embedText({ apiUrl, model, text: nextText });
+        await updateMemory(db, { id: liveId, text: nextText, embedding: emb, updatedAt: Date.now() });
+        closeMemoryEditModal();
+        await renderMemoriesUI();
+        try {
+          window.dispatchEvent(new CustomEvent('cc:memoriesChanged', { detail: { reason: 'edit' } }));
+        } catch {
+          // ignore
+        }
+      } catch (e) {
+        showError?.(els.errorEl, e?.message || 'Failed to edit memory.');
+      } finally {
+        els.memoryEditSaveBtn?.removeAttribute('disabled');
+      }
+    };
+
+    if (els.memoryEditSaveBtn) {
+      els.memoryEditSaveBtn.onclick = (e) => {
+        e.preventDefault();
+        void save();
+      };
+    }
+
+    if (els.memoryEditInputEl) {
+      els.memoryEditInputEl.onkeydown = (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+          e.preventDefault();
+          void save();
+        }
+      };
     }
   }
 
@@ -78,6 +174,7 @@ export function createMemoriesActions({
   return {
     renderMemoriesUI,
     deleteMemoryPermanently,
-    addMemoryFromText
+    addMemoryFromText,
+    editMemory
   };
 }

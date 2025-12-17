@@ -31,6 +31,38 @@ export function attachUIBindings({
 }) {
   const bindingsAbort = new AbortController();
 
+  const applyThemeAndAccent = () => {
+    try {
+      document.documentElement.dataset.theme = (state?.theme || 'dark').toString();
+    } catch {
+      // ignore
+    }
+    try {
+      document.documentElement.style.setProperty('--accent', (state?.accent || '#7fc9ff').toString());
+    } catch {
+      // ignore
+    }
+  };
+
+  const updateThemeSegmentUI = () => {
+    const theme = (state?.theme || 'dark').toString();
+    els.themeDarkBtn?.classList.toggle('active', theme === 'dark');
+    els.themeLightBtn?.classList.toggle('active', theme === 'light');
+    els.themeDarkBtn?.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
+    els.themeLightBtn?.setAttribute('aria-pressed', theme === 'light' ? 'true' : 'false');
+  };
+
+  const updateAccentSwatchesUI = () => {
+    const accent = (state?.accent || '#7fc9ff').toString().toLowerCase();
+    const swatches = Array.from(els.accentSwatchesEl?.querySelectorAll?.('.accent-swatch') || []);
+    swatches.forEach((btn) => {
+      const v = (btn?.dataset?.accent || '').toString().toLowerCase();
+      const isActive = v === accent;
+      btn.classList.toggle('active', isActive);
+      btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
+  };
+
   window.addEventListener(
     'cc:openMemories',
     (e) => {
@@ -181,6 +213,37 @@ export function attachUIBindings({
     autosizePrompt(els.promptInput);
     els.promptInput.focus();
   });
+
+  const onThemeClick = (e) => {
+    const btn = e?.currentTarget;
+    const next = (btn?.dataset?.theme || '').toString();
+    if (next !== 'dark' && next !== 'light') return;
+    state.theme = next;
+    applyThemeAndAccent();
+    updateThemeSegmentUI();
+    saveUIState(state);
+  };
+
+  els.themeDarkBtn?.addEventListener('click', onThemeClick, { signal: bindingsAbort.signal });
+  els.themeLightBtn?.addEventListener('click', onThemeClick, { signal: bindingsAbort.signal });
+
+  els.accentSwatchesEl?.addEventListener(
+    'click',
+    (e) => {
+      const btn = e?.target?.closest?.('.accent-swatch');
+      if (!btn || !els.accentSwatchesEl.contains(btn)) return;
+      const next = (btn?.dataset?.accent || '').toString();
+      if (!next) return;
+      state.accent = next;
+      applyThemeAndAccent();
+      updateAccentSwatchesUI();
+      saveUIState(state);
+    },
+    { signal: bindingsAbort.signal }
+  );
+
+  updateThemeSegmentUI();
+  updateAccentSwatchesUI();
 
   els.trashBtn?.addEventListener('click', () => {
     applySidebarSelection?.({ kind: 'trash' });

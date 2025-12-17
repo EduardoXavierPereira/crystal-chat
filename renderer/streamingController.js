@@ -403,64 +403,6 @@ export function createStreamingController({
       return { tool, args };
     };
 
-    const extractFirstJsonObject = (text) => {
-      const raw = (text || '').toString().trim();
-      if (!raw) return null;
-      if (raw.length > 20000) return null;
-
-      const start = raw.indexOf('{');
-      if (start < 0) return null;
-      let depth = 0;
-      let end = -1;
-      for (let i = start; i < raw.length; i += 1) {
-        const ch = raw[i];
-        if (ch === '{') depth += 1;
-        if (ch === '}') {
-          depth -= 1;
-          if (depth === 0) {
-            end = i;
-            break;
-          }
-        }
-      }
-      if (end < 0) return null;
-      const candidate = raw.slice(start, end + 1).trim();
-      try {
-        return JSON.parse(candidate);
-      } catch {
-        return null;
-      }
-    };
-
-    const normalizeMemoryEditorActions = (obj) => {
-      const out = [];
-      const push = (a) => {
-        if (!a || typeof a !== 'object') return;
-        const type = (a.type || a.action || '').toString().trim().toLowerCase();
-        if (type !== 'create' && type !== 'update' && type !== 'delete') return;
-        const id = typeof a.id === 'string' ? a.id : null;
-        const text = typeof a.text === 'string' ? a.text : null;
-        out.push({ type, id, text });
-      };
-
-      if (!obj || typeof obj !== 'object') return out;
-      if (Array.isArray(obj.actions)) {
-        obj.actions.forEach(push);
-        return out;
-      }
-
-      if (Array.isArray(obj.create)) {
-        obj.create.forEach((x) => push({ type: 'create', text: x?.text ?? x }));
-      }
-      if (Array.isArray(obj.update)) {
-        obj.update.forEach((x) => push({ type: 'update', id: x?.id, text: x?.text }));
-      }
-      if (Array.isArray(obj.delete)) {
-        obj.delete.forEach((x) => push({ type: 'delete', id: x?.id ?? x }));
-      }
-      return out;
-    };
-
     const runTool = async ({ tool, args }) => {
       const api = window.electronAPI;
       if (!api) throw new Error('Tools unavailable.');

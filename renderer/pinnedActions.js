@@ -35,9 +35,12 @@ export function createPinnedActions({
     }
     if (!state.pinnedOpen) return;
 
+    const activeChatId = state.sidebarSelection?.kind === 'chat' ? state.sidebarSelection.id : null;
+
     renderPinnedDropdown({
       els,
       pinnedChats: getPinnedChats(),
+      activeChatId,
       onOpenChat: (id) => {
         applySidebarSelection({ kind: 'chat', id });
         els.promptInput?.focus();

@@ -1,4 +1,4 @@
-export function renderMemories({ els, memories, query, onDelete } = {}) {
+export function renderMemories({ els, memories, query, onDelete, onEdit } = {}) {
   if (!els?.memoriesListEl) return;
   els.memoriesListEl.innerHTML = '';
 
@@ -48,6 +48,13 @@ export function renderMemories({ els, memories, query, onDelete } = {}) {
 
       const actions = document.createElement('div');
       actions.className = 'memories-item-actions';
+
+      const edit = document.createElement('button');
+      edit.className = 'memories-edit';
+      edit.type = 'button';
+      edit.textContent = 'Edit';
+      edit.onclick = async () => onEdit?.(m);
+      actions.appendChild(edit);
 
       const del = document.createElement('button');
       del.className = 'memories-delete danger';
