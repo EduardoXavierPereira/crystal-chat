@@ -24,6 +24,7 @@ import { createCustomDropdown } from './customDropdown.js';
 import { formatModelName } from './formatModelName.js';
 import { createTrashActions } from './trashActions.js';
 import { createPinnedActions } from './pinnedActions.js';
+import { createFoldersActions } from './foldersActions.js';
 import { createChatSidebarController } from './chatSidebarController.js';
 import { createStreamingController } from './streamingController.js';
 import { runInit } from './init.js';
@@ -70,6 +71,8 @@ let trashActions = null;
 let pinnedActions = null;
 
 let memoriesActions = null;
+
+let foldersActions = null;
 
 let chatSidebarController = null;
 
@@ -625,6 +628,7 @@ async function continueInitAfterSetup() {
   state.updateMemoryEnabled = typeof ui?.updateMemoryEnabled === 'boolean' ? ui.updateMemoryEnabled : state.updateMemoryEnabled;
   state.theme = (ui?.theme || state.theme || 'system').toString();
   state.accent = (ui?.accent || state.accent || '#7fc9ff').toString();
+  state.folders = Array.isArray(ui?.folders) ? ui.folders : [];
   clearPendingImage();
   applyThemeAndAccent(state);
 
@@ -764,6 +768,16 @@ async function continueInitAfterSetup() {
     renderActiveChatUI
   });
 
+  foldersActions = createFoldersActions({
+    els,
+    state,
+    saveUIState,
+    renderChatsUI,
+    applySidebarSelection: (sel) => chatSidebarController?.applySidebarSelection(sel)
+  });
+
+  foldersActions?.attachBindings?.();
+
   trashActions = createTrashActions({
     db,
     els,
@@ -830,6 +844,7 @@ async function continueInitAfterSetup() {
     commitRename,
     getTrashActions: () => trashActions,
     getPinnedActions: () => pinnedActions,
+    getFoldersActions: () => foldersActions,
     focusDockView
   });
 

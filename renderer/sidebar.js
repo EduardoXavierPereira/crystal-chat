@@ -46,6 +46,8 @@ export function getEls() {
     pinnedBtn: document.getElementById('pinned-btn'),
     pinnedDropdownEl: document.getElementById('pinned-dropdown'),
     pinnedDropdownListEl: document.getElementById('pinned-dropdown-list'),
+    foldersListEl: document.getElementById('folders-list'),
+    foldersNewBtn: document.getElementById('folders-new-btn'),
     trashBtn: document.getElementById('trash-btn'),
     trashSearchInput: document.getElementById('trash-search-input'),
     trashListEl: document.getElementById('trash-list'),
@@ -65,6 +67,10 @@ export function getEls() {
     memoryEditInputEl: document.getElementById('memory-edit-input'),
     memoryEditCancelBtn: document.getElementById('memory-edit-cancel'),
     memoryEditSaveBtn: document.getElementById('memory-edit-save'),
+    folderCreateModalEl: document.getElementById('folder-create-modal'),
+    folderCreateInputEl: document.getElementById('folder-create-input'),
+    folderCreateCancelBtn: document.getElementById('folder-create-cancel'),
+    folderCreateOkBtn: document.getElementById('folder-create-ok'),
     setupModalEl: document.getElementById('setup-modal'),
     setupMessageEl: document.getElementById('setup-message'),
     setupProgressLabelEl: document.getElementById('setup-progress-label'),
@@ -123,16 +129,28 @@ function escapeRegExp(text) {
   return (text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-export function renderChats({ els, state, onSetActiveChat, onStartRename, onTrashChat, onTogglePinned }) {
+export function renderChats({
+  els,
+  state,
+  onSetActiveChat,
+  onStartRename,
+  onTrashChat,
+  onTogglePinned,
+  hiddenChatIds,
+  onDragStartChat
+}) {
   els.chatListEl.innerHTML = '';
   els.newChatBtn?.classList.toggle('active', state.sidebarSelection.kind === 'chat' && state.sidebarSelection.id === null && !!state.pendingNew);
   els.pinnedBtn?.classList.toggle('active', !!state.pinnedOpen);
   els.pinnedBtn?.classList.toggle('open', !!state.pinnedOpen);
 
   const query = (state.chatQuery || '').trim().toLowerCase();
-  const chats = query
+  const base = query
     ? state.chats.filter((chat) => chatTitleFromMessages(chat).toLowerCase().includes(query))
     : state.chats;
+
+  const hiddenSet = hiddenChatIds && typeof hiddenChatIds.has === 'function' ? hiddenChatIds : null;
+  const chats = hiddenSet ? base.filter((c) => !hiddenSet.has(c.id)) : base;
 
   if (!chats.length) {
     const empty = document.createElement('div');
@@ -150,6 +168,11 @@ export function renderChats({ els, state, onSetActiveChat, onStartRename, onTras
     const item = document.createElement('div');
     item.className = `chat-item ${state.sidebarSelection.kind === 'chat' && chat.id === state.sidebarSelection.id ? 'active' : ''}`;
     item.onclick = () => onSetActiveChat(chat.id);
+
+    item.draggable = true;
+    item.ondragstart = (e) => {
+      onDragStartChat?.(e, chat.id);
+    };
 
     const content = document.createElement('div');
     content.className = 'chat-name';

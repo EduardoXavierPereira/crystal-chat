@@ -31,6 +31,7 @@ export function createInitialState() {
     systemPrompt: DEFAULT_SYSTEM_PROMPT,
     enableInternet: false,
     updateMemoryEnabled: true,
+    folders: [],
     sidebarSelection: { kind: 'chat', id: null }
   };
 }
@@ -50,6 +51,7 @@ export function saveUIState(state) {
       updateMemoryEnabled: typeof state.updateMemoryEnabled === 'boolean' ? state.updateMemoryEnabled : true,
       theme: (state.theme || 'system').toString(),
       accent: (state.accent || '#7fc9ff').toString(),
+      folders: Array.isArray(state.folders) ? state.folders : [],
       sidebarSelection:
         state.sidebarSelection.kind === 'chat' && state.sidebarSelection.id === TEMP_CHAT_ID
           ? { kind: 'chat', id: null }
@@ -78,6 +80,9 @@ export function loadUIState() {
       }
       if (typeof parsed.accent === 'undefined') {
         parsed.accent = '#7fc9ff';
+      }
+      if (!Array.isArray(parsed.folders)) {
+        parsed.folders = [];
       }
     }
     return parsed;
