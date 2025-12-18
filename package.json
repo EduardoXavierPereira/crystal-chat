@@ -7,7 +7,7 @@
   "author": "Eduardo Pereira <help.crystalgames@gmail.com>",
   "license": "Apache-2.0",
   "scripts": {
-    "postinstall": "node scripts/build-vendor.js",
+    "postinstall": "node -e \"const fs=require('fs');const p='renderer/vendor/golden-layout.bundle.js';if(!fs.existsSync(p)){console.warn('Vendor bundle missing: '+p);}\"",
     "start": "electron .",
     "serve:renderer": "npx http-server . -p 4177 -c-1",
     "e2e": "start-server-and-test serve:renderer http://localhost:4177 cypress:run",
