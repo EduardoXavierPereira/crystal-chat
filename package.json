@@ -33,7 +33,8 @@
       {
         "provider": "github",
         "owner": "EduardoXavierPereira",
-        "repo": "crystal-chat"
+        "repo": "crystal-chat",
+        "releaseType": "release"
       }
     ],
     "directories": {
