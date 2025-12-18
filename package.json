@@ -83,6 +83,7 @@
   "dependencies": {
     "golden-layout": "^2.6.0",
     "electron-updater": "^6.3.0",
-    "marked": "^12.0.2"
+    "marked": "^12.0.2",
+    "pdfjs-dist": "^4.10.38"
   }
 }

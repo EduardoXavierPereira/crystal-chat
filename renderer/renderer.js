@@ -46,6 +46,7 @@ let db;
 function clearPendingImage() {
   state.pendingImage = null;
   state.pendingTextFile = null;
+  state.pendingFile = null;
   els.promptInsertBtn?.classList.remove('has-attachment');
   if (els.promptAttachmentsEl) {
     els.promptAttachmentsEl.innerHTML = '';
@@ -59,6 +60,10 @@ function getPendingImage() {
 
 function getPendingTextFile() {
   return state?.pendingTextFile || null;
+}
+
+function getPendingFile() {
+  return state?.pendingFile || null;
 }
 
 let initCompleted = false;
@@ -1007,6 +1012,7 @@ async function continueInitAfterSetup() {
     streamAssistant,
     getPendingImage,
     getPendingTextFile,
+    getPendingFile,
     clearPendingImage
   });
 

@@ -599,8 +599,9 @@ export function renderMessageElement(
 
   if (msg.role === 'user') {
     const hasImages = Array.isArray(msg.images) && msg.images.length > 0;
-    const hasFile = !!(msg.textFile && typeof msg.textFile === 'object');
-    if (hasImages || hasFile) {
+    const hasTextFile = !!(msg.textFile && typeof msg.textFile === 'object');
+    const hasFiles = Array.isArray(msg.files) && msg.files.length > 0;
+    if (hasImages || hasTextFile || hasFiles) {
       const attach = document.createElement('div');
       attach.className = 'message-attachments';
 
@@ -626,7 +627,7 @@ export function renderMessageElement(
         });
       }
 
-      if (hasFile) {
+      if (hasTextFile) {
         const chip = document.createElement('div');
         chip.className = 'message-attachment-file';
         const name = (msg.textFile?.name || 'file').toString();
@@ -636,6 +637,38 @@ export function renderMessageElement(
           : '';
         chip.textContent = sizeLabel ? `File: ${name} (${sizeLabel})` : `File: ${name}`;
         attach.appendChild(chip);
+      }
+
+      if (hasFiles) {
+        msg.files.forEach((f) => {
+          if (!f || typeof f !== 'object') return;
+          const name = (f.name || 'file').toString();
+          const type = (f.type || '').toString();
+          const size = typeof f.size === 'number' ? f.size : 0;
+          const sizeLabel = size > 0
+            ? (size < 1024 ? `${size} B` : `${Math.max(1, Math.ceil(size / 1024))} KB`)
+            : '';
+
+          const href = (f.dataUrl || '').toString();
+          const label = sizeLabel ? `File: ${name} (${sizeLabel})` : `File: ${name}`;
+
+          if (href && href.startsWith('data:')) {
+            const a = document.createElement('a');
+            a.className = 'message-attachment-file';
+            a.textContent = label;
+            a.href = href;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            a.download = name;
+            a.title = type ? `${type}` : 'Download file';
+            attach.appendChild(a);
+          } else {
+            const chip = document.createElement('div');
+            chip.className = 'message-attachment-file';
+            chip.textContent = label;
+            attach.appendChild(chip);
+          }
+        });
       }
 
       div.appendChild(attach);

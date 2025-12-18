@@ -15,6 +15,7 @@ export function createChatController({
   streamAssistant,
   getPendingImage,
   getPendingTextFile,
+  getPendingFile,
   clearPendingImage
 }) {
   function ensureChatStructure(chat) {
@@ -126,17 +127,22 @@ export function createChatController({
 
     const pendingImage = getPendingImage?.() || null;
     const pendingTextFile = getPendingTextFile?.() || null;
+    const pendingFile = getPendingFile?.() || null;
 
     const rawContent = (els.promptInput.value || '').toString();
     const content = rawContent.trim();
-    if (!content && !pendingImage && !pendingTextFile) return;
+    if (!content && !pendingImage && !pendingTextFile && !pendingFile) return;
 
-    let finalContent = content;
-    if (pendingTextFile && pendingTextFile.text) {
-      const name = (pendingTextFile.name || 'file').toString();
-      const block = `[File: ${name}]\n${(pendingTextFile.text || '').toString()}`;
-      finalContent = finalContent ? `${finalContent}\n\n${block}` : block;
-    }
+    const attachmentText = pendingTextFile && pendingTextFile.text
+      ? (() => {
+          const name = (pendingTextFile.name || 'file').toString();
+          const block = `[File: ${name}]\n${(pendingTextFile.text || '').toString()}`;
+          return block;
+        })()
+      : '';
+
+    const isPdfTextFile =
+      !!pendingTextFile && (pendingTextFile.type || '').toString().toLowerCase() === 'application/pdf';
 
     hideError(els.errorEl);
     els.promptInput.value = '';
@@ -174,9 +180,20 @@ export function createChatController({
     const userMsg = {
       id: crypto.randomUUID(),
       role: 'user',
-      content: finalContent,
+      content,
+      attachmentText,
       images: pendingImage?.previewUrl ? [pendingImage.previewUrl] : (pendingImage?.base64 ? [`data:image/*;base64,${pendingImage.base64}`] : undefined),
-      textFile: pendingTextFile
+      files: pendingFile
+        ? [
+            {
+              name: (pendingFile.name || 'file').toString(),
+              type: (pendingFile.type || '').toString(),
+              size: typeof pendingFile.size === 'number' ? pendingFile.size : 0,
+              dataUrl: (pendingFile.dataUrl || '').toString()
+            }
+          ]
+        : undefined,
+      textFile: pendingTextFile && !isPdfTextFile
         ? {
             name: (pendingTextFile.name || 'file').toString(),
             size: typeof pendingTextFile.size === 'number' ? pendingTextFile.size : 0
@@ -186,7 +203,7 @@ export function createChatController({
     };
     chat.messages.push(userMsg);
 
-    if (pendingImage || pendingTextFile) {
+    if (pendingImage || pendingTextFile || pendingFile) {
       clearPendingImage?.();
     }
     if (chat.id !== tempChatId) {

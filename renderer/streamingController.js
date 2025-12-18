@@ -438,7 +438,15 @@ export function createStreamingController({
         combinedSystem = `${combinedSystem}\n\n${toolBlock}`;
       }
 
-      const historyMessages = chat.messages.slice(0, -1);
+      const historyMessages = chat.messages.slice(0, -1).map((m) => {
+        if (!m || typeof m !== 'object') return m;
+        if (m.role !== 'user') return m;
+        const base = (m.content || '').toString();
+        const extra = (m.attachmentText || '').toString();
+        if (!extra.trim()) return m;
+        const combined = base.trim() ? `${base}\n\n${extra}` : extra;
+        return { ...m, content: combined };
+      });
 
       try {
         const last = historyMessages[historyMessages.length - 1];

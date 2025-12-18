@@ -46,6 +46,80 @@ export function attachUIBindings({
     return prefersDarkMql?.matches ? 'dark' : 'light';
   };
 
+  const extractPdfText = async (file) => {
+    try {
+      if (!file) return '';
+      const name = (file.name || '').toString().toLowerCase();
+      const type = (file.type || '').toString().toLowerCase();
+      if (type !== 'application/pdf' && !name.endsWith('.pdf')) return '';
+
+      const pdfjs = await import(new URL('../node_modules/pdfjs-dist/build/pdf.mjs', import.meta.url).toString());
+      try {
+        if (pdfjs?.GlobalWorkerOptions) {
+          pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+            '../node_modules/pdfjs-dist/build/pdf.worker.min.mjs',
+            import.meta.url
+          ).toString();
+        }
+      } catch {
+        // ignore
+      }
+
+      const buf = await file.arrayBuffer();
+      const loadingTask = pdfjs.getDocument({ data: new Uint8Array(buf) });
+      const doc = await loadingTask.promise;
+
+      const maxPages = 25;
+      const maxChars = 200000;
+      const pageCount = Math.min(doc.numPages || 0, maxPages);
+
+      const parts = [];
+      let used = 0;
+      for (let i = 1; i <= pageCount; i += 1) {
+        if (used >= maxChars) break;
+        const page = await doc.getPage(i);
+        const tc = await page.getTextContent();
+        const pageText = (tc?.items || [])
+          .map((it) => (it && typeof it.str === 'string' ? it.str : ''))
+          .filter((s) => s)
+          .join(' ')
+          .replace(/\s{2,}/g, ' ')
+          .trim();
+        if (!pageText) continue;
+        parts.push(pageText);
+        used += pageText.length + 2;
+      }
+
+      const raw = parts.join('\n\n');
+      if (!raw) return '';
+      return raw.length > maxChars ? `${raw.slice(0, maxChars)}\n\n[...truncated...]` : raw;
+    } catch {
+      return '';
+    }
+  };
+
+  const attachBinaryFile = async (file) => {
+    try {
+      if (!file) return false;
+      const dataUrl = await new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onerror = () => reject(new Error('file_read_failed'));
+        fr.onload = () => resolve(String(fr.result || ''));
+        fr.readAsDataURL(file);
+      });
+      state.pendingFile = {
+        dataUrl,
+        name: file.name,
+        type: file.type,
+        size: typeof file.size === 'number' ? file.size : 0
+      };
+      renderPromptAttachments();
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const applyThemeAndAccent = () => {
     try {
       document.documentElement.dataset.theme = resolveTheme();
@@ -102,7 +176,11 @@ export function attachUIBindings({
 
     const textFile = state.pendingTextFile || null;
     const img = state.pendingImage || null;
-    const hasAny = !!(textFile || img);
+    const file = state.pendingFile || null;
+    const hasAny = !!(textFile || img || file);
+
+    const isPdfText = !!textFile && (textFile.type || '').toString().toLowerCase() === 'application/pdf';
+    const isPdfFile = !!file && (file.type || '').toString().toLowerCase() === 'application/pdf';
 
     root.innerHTML = '';
     root.classList.toggle('hidden', !hasAny);
@@ -114,7 +192,8 @@ export function attachUIBindings({
 
       const title = document.createElement('div');
       title.className = 'prompt-attachment-title';
-      title.textContent = `Text: ${textFile.name || 'file'}`;
+      const isPdfText = (textFile.type || '').toString().toLowerCase() === 'application/pdf';
+      title.textContent = `${isPdfText ? 'PDF' : 'Text'}: ${textFile.name || 'file'}`;
 
       const meta = document.createElement('div');
       meta.className = 'prompt-attachment-meta';
@@ -135,6 +214,7 @@ export function attachUIBindings({
         'click',
         () => {
           state.pendingTextFile = null;
+          if (isPdfText) state.pendingFile = null;
           renderPromptAttachments();
         },
         { signal: bindingsAbort.signal }
@@ -175,6 +255,45 @@ export function attachUIBindings({
 
       wrap.appendChild(thumb);
       wrap.appendChild(title);
+      wrap.appendChild(remove);
+      root.appendChild(wrap);
+    }
+
+    if (file && !isPdfText) {
+      const wrap = document.createElement('div');
+      wrap.className = 'prompt-attachment';
+
+      const title = document.createElement('div');
+      title.className = 'prompt-attachment-title';
+      title.textContent = `File: ${file.name || 'file'}`;
+
+      const meta = document.createElement('div');
+      meta.className = 'prompt-attachment-meta';
+      if (typeof file.size === 'number' && file.size > 0) {
+        meta.textContent = file.size < 1024
+          ? `${file.size} B`
+          : `${Math.max(1, Math.ceil(file.size / 1024))} KB`;
+      } else {
+        meta.textContent = '';
+      }
+
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'prompt-attachment-remove';
+      remove.setAttribute('aria-label', 'Remove file');
+      remove.textContent = '×';
+      remove.addEventListener(
+        'click',
+        () => {
+          state.pendingFile = null;
+          if (isPdfFile) state.pendingTextFile = null;
+          renderPromptAttachments();
+        },
+        { signal: bindingsAbort.signal }
+      );
+
+      wrap.appendChild(title);
+      if (meta.textContent) wrap.appendChild(meta);
       wrap.appendChild(remove);
       root.appendChild(wrap);
     }
@@ -221,15 +340,42 @@ export function attachUIBindings({
     }
   };
 
+  const attachPdfFile = async (file) => {
+    try {
+      if (!file) return false;
+
+      const ok = await attachBinaryFile(file);
+      if (!ok) return false;
+
+      const extracted = await extractPdfText(file);
+      const text = extracted
+        ? extracted
+        : '[PDF text extraction failed. This PDF may be scanned (image-only) or the PDF parser could not load. Try OCR or a text-based PDF.]';
+      state.pendingTextFile = {
+        name: file.name,
+        type: file.type,
+        size: typeof file.size === 'number' ? file.size : 0,
+        text
+      };
+      renderPromptAttachments();
+
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const classifyAndAttachFile = async (file) => {
     if (!file) return false;
     const type = (file.type || '').toString();
     const name = (file.name || '').toString().toLowerCase();
     const isImage = type.startsWith('image/');
     const isTextLike = type.startsWith('text/') || /\.(md|txt|json|csv|js|ts|py|html|css|yaml|yml)$/i.test(name);
+    const isPdf = type === 'application/pdf' || /\.pdf$/i.test(name);
     if (isImage) return await attachImageFile(file);
     if (isTextLike) return await attachTextFile(file);
-    return false;
+    if (isPdf) return await attachPdfFile(file);
+    return await attachBinaryFile(file);
   };
 
   window.addEventListener(
@@ -509,16 +655,7 @@ export function attachUIBindings({
       const file = els.promptInsertTextInput?.files?.[0];
       try {
         if (!file) return;
-        const text = await file.text();
-        const cap = 200000;
-        const clipped = text.length > cap ? `${text.slice(0, cap)}\n\n[...truncated...]` : text;
-        state.pendingTextFile = {
-          name: file.name,
-          type: file.type,
-          size: typeof file.size === 'number' ? file.size : 0,
-          text: clipped
-        };
-        renderPromptAttachments();
+        await classifyAndAttachFile(file);
       } catch {
         // ignore
       } finally {
