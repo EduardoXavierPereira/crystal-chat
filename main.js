@@ -412,7 +412,16 @@ async function installOllamaBestEffort() {
     const hasWinget = await hasCommand('winget');
     if (hasWinget) {
       sendSetupProgress({ kind: 'stage', stage: 'install', message: 'Installing Ollama via winget...' });
-      const p = spawnWithOutput('winget', ['install', '--exact', '--id', 'Ollama.Ollama', '--silent']);
+      const p = spawnWithOutput('winget', [
+        'install',
+        '--exact',
+        '--id',
+        'Ollama.Ollama',
+        '--silent',
+        '--accept-package-agreements',
+        '--accept-source-agreements',
+        '--disable-interactivity'
+      ]);
       const code = await new Promise((resolve) => p.on('close', resolve));
       const ok = code === 0 && (await hasCommand('ollama'));
       if (!ok) {
