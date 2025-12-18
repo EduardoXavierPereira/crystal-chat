@@ -861,6 +861,8 @@ html[data-theme="light"] #new-chat.button-ghost:not(.active):hover {
   font-weight: 650;
   color: var(--text);
   font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
 }
 
 .folders-new-btn {
