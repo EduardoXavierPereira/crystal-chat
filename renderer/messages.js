@@ -110,10 +110,87 @@ export function updateRenderedMessage({ els, msg, messageIndex } = {}) {
   const root = els.messagesEl.querySelector(`.message[data-message-index="${messageIndex}"]`);
   if (!root) return false;
 
+  // During an active mouse drag, the Selection API may not yet reflect a stable Range,
+  // but DOM updates can still corrupt the selection anchor. Track mousedown->mouseup.
+  try {
+    if (!window.__ccSelectionGuardsInstalled) {
+      window.__ccSelectionGuardsInstalled = true;
+      window.__ccMouseSelecting = false;
+      window.__ccMouseSelectingMessageIndex = null;
+
+      document.addEventListener('mousedown', (e) => {
+        try {
+          const target = e?.target;
+          if (!target || !(target instanceof Element)) return;
+          const msgEl = target.closest?.('.message[data-message-index]');
+          if (!msgEl) return;
+          window.__ccMouseSelecting = true;
+          window.__ccMouseSelectingMessageIndex = msgEl.getAttribute('data-message-index');
+        } catch {
+          // ignore
+        }
+      }, true);
+
+      const clear = () => {
+        window.__ccMouseSelecting = false;
+        window.__ccMouseSelectingMessageIndex = null;
+      };
+      document.addEventListener('mouseup', clear, true);
+      document.addEventListener('dragend', clear, true);
+      window.addEventListener('blur', clear, true);
+    }
+  } catch {
+    // ignore
+  }
+
+  const hasSelectionWithin = (host) => {
+    try {
+      if (!host) return false;
+      const sel = window.getSelection?.();
+      if (!sel) return false;
+      if (sel.type !== 'Range') return false;
+      if (sel.rangeCount <= 0) return false;
+      const range = sel.getRangeAt(0);
+      const node = range?.commonAncestorContainer;
+      if (!node) return false;
+      const el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+      if (!el) return false;
+      return host.contains(el);
+    } catch {
+      return false;
+    }
+  };
+
+  // If the user is selecting text while streaming, avoid DOM mutations inside this message.
+  // Even "safe" updates (text node value changes, class toggles) can cause selection to jump/expand.
+  const freezeThisMessageDuringStream = !msg._done && (
+    hasSelectionWithin(root)
+    || (window.__ccMouseSelecting && String(window.__ccMouseSelectingMessageIndex) === String(messageIndex))
+  );
+
+  const markSectionSeen = (key) => {
+    if (!msg) return;
+    if (!msg._sectionSeenSeq || typeof msg._sectionSeenSeq !== 'object') msg._sectionSeenSeq = {};
+    if (msg._sectionSeenSeq[key]) return;
+    if (!window.__ccSectionSeq) window.__ccSectionSeq = 1;
+    else window.__ccSectionSeq += 1;
+    msg._sectionSeenSeq[key] = window.__ccSectionSeq;
+  };
+
   const ensureSectionOrder = (key) => {
     if (!msg) return;
     if (!Array.isArray(msg._sectionOrder)) msg._sectionOrder = [];
     if (!msg._sectionOrder.includes(key)) msg._sectionOrder.push(key);
+  };
+
+  const syncSectionOrderFromSeen = () => {
+    const seen = msg?._sectionSeenSeq;
+    if (!seen || typeof seen !== 'object') return;
+    const next = Object.entries(seen)
+      .filter(([k, v]) => k && Number.isFinite(v))
+      .sort((a, b) => a[1] - b[1])
+      .map(([k]) => k);
+    msg._sectionOrder = next;
   };
 
   const removeSectionOrder = (key) => {
@@ -130,9 +207,10 @@ export function updateRenderedMessage({ els, msg, messageIndex } = {}) {
       memories: root.querySelector('.memories-retrieved')
     };
 
+    syncSectionOrderFromSeen();
     const order = Array.isArray(msg._sectionOrder) && msg._sectionOrder.length
       ? msg._sectionOrder
-      : ['thinking', 'memories'];
+      : [];
 
     let insertAfter = header;
     order.forEach((k) => {
@@ -148,16 +226,35 @@ export function updateRenderedMessage({ els, msg, messageIndex } = {}) {
   // Update assistant content
   const contentEl = root.querySelector('.message-content');
   if (contentEl) {
-    if (msg.role === 'assistant' && window.marked) {
+    const shouldRenderMarkdown = msg.role === 'assistant' && window.marked && !!msg._done;
+    if (shouldRenderMarkdown) {
       contentEl.innerHTML = sanitizeAssistantHtml(window.marked.parse(msg.content || ''));
     } else {
-      contentEl.textContent = (msg.content || '').toString();
+      if (freezeThisMessageDuringStream) return true;
+      // While streaming, avoid replacing the entire contents (which breaks selection).
+      // Keep a stable text node and only update its value.
+      const nextText = (msg.content || '').toString();
+      let textNode = contentEl.firstChild;
+      if (!textNode || textNode.nodeType !== Node.TEXT_NODE || contentEl.childNodes.length !== 1) {
+        while (contentEl.firstChild) contentEl.removeChild(contentEl.firstChild);
+        textNode = document.createTextNode('');
+        contentEl.appendChild(textNode);
+      }
+      textNode.nodeValue = nextText;
     }
   }
 
   // Update thinking section
   const thinkingWrap = root.querySelector('.thinking');
   const shouldHaveThinking = msg.role === 'assistant' && (msg.thinking || msg._thinkingActive);
+
+  const retrieved = msg.role === 'assistant' && Array.isArray(msg._retrievedMemories) ? msg._retrievedMemories : null;
+  const shouldHaveRetrieved = !!retrieved && retrieved.length > 0;
+
+  if (shouldHaveRetrieved) markSectionSeen('memories');
+  if (shouldHaveThinking) markSectionSeen('thinking');
+
+  if (freezeThisMessageDuringStream) return true;
 
   if (!shouldHaveThinking) {
     if (thinkingWrap) thinkingWrap.remove();
@@ -219,7 +316,14 @@ export function updateRenderedMessage({ els, msg, messageIndex } = {}) {
     wrap.appendChild(toggle);
     wrap.appendChild(body);
 
-    root.appendChild(wrap);
+    // Insert inline at the moment it first appears (right before content).
+    // This preserves the natural order of appearance during streaming.
+    const anchor = root.querySelector('.message-content');
+    if (anchor) root.insertBefore(wrap, anchor);
+    else root.appendChild(wrap);
+
+    // Ensure visual order matches first-seen order.
+    reorderSections();
   }
 
   if (!wrap) {
@@ -234,18 +338,23 @@ export function updateRenderedMessage({ els, msg, messageIndex } = {}) {
     if (lbl) lbl.textContent = msg._thinkingActive ? 'Thinking…' : 'Thinking';
   }
   if (body) {
-    body.textContent = msg.thinking || '';
+    if (!msg._done && hasSelectionWithin(body)) return true;
+    const nextText = (msg.thinking || '').toString();
+    let textNode = body.firstChild;
+    if (!textNode || textNode.nodeType !== Node.TEXT_NODE || body.childNodes.length !== 1) {
+      while (body.firstChild) body.removeChild(body.firstChild);
+      textNode = document.createTextNode('');
+      body.appendChild(textNode);
+    }
+    textNode.nodeValue = nextText;
     body.classList.toggle('hidden', !msg._thinkingOpen);
   }
 
   const memoriesWrap = root.querySelector('.memories-retrieved');
-  const retrieved = msg.role === 'assistant' && Array.isArray(msg._retrievedMemories) ? msg._retrievedMemories : null;
-  const shouldHaveRetrieved = !!retrieved && retrieved.length > 0;
 
   if (!shouldHaveRetrieved) {
     if (memoriesWrap) memoriesWrap.remove();
     removeSectionOrder('memories');
-    reorderSections();
     return true;
   }
 
@@ -301,13 +410,20 @@ export function updateRenderedMessage({ els, msg, messageIndex } = {}) {
     mwrap.appendChild(mtoggle);
     mwrap.appendChild(mbody);
 
-    root.appendChild(mwrap);
+    // Insert inline at the moment it first appears (right before content).
+    const anchor = root.querySelector('.message-content');
+    if (anchor) root.insertBefore(mwrap, anchor);
+    else root.appendChild(mwrap);
+
+    // Ensure visual order matches first-seen order.
+    reorderSections();
   }
 
   const mbody = mwrap.querySelector('.thinking-body');
   const mtoggle = mwrap.querySelector('.thinking-toggle');
   if (mtoggle) mtoggle.classList.toggle('open', !!msg._retrievedMemoriesOpen);
   if (mbody) {
+    if (!msg._done && hasSelectionWithin(mbody)) return true;
     mbody.classList.toggle('hidden', !msg._retrievedMemoriesOpen);
     mbody.innerHTML = '';
     void import('./memories.js').then(({ getMemoryDisplayParts }) => {
@@ -330,7 +446,7 @@ export function updateRenderedMessage({ els, msg, messageIndex } = {}) {
     });
   }
 
-  reorderSections();
+  if (!msg._done && hasSelectionWithin(root)) return true;
 
   return true;
 }

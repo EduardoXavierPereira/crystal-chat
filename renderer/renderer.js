@@ -132,6 +132,25 @@ function createMagneticScrollController({ els, state }) {
   const releaseDistancePx = 260;
   const releaseImpulsePx = 160;
 
+  const hasActiveSelectionInMessages = () => {
+    try {
+      const host = els.messagesEl;
+      if (!host) return false;
+      const sel = window.getSelection?.();
+      if (!sel) return false;
+      if (sel.type !== 'Range') return false;
+      if (sel.rangeCount <= 0) return false;
+      const range = sel.getRangeAt(0);
+      const node = range?.commonAncestorContainer;
+      if (!node) return false;
+      const el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+      if (!el) return false;
+      return host.contains(el);
+    } catch {
+      return false;
+    }
+  };
+
   const getDistanceFromBottom = () => {
     const el = els.messagesEl;
     if (!el) return Infinity;
@@ -144,6 +163,7 @@ function createMagneticScrollController({ els, state }) {
   const scrollToBottom = () => {
     const el = els.messagesEl;
     if (!el) return;
+    if (hasActiveSelectionInMessages()) return;
     if (raf) return;
     raf = window.requestAnimationFrame(() => {
       raf = null;
@@ -165,6 +185,11 @@ function createMagneticScrollController({ els, state }) {
 
   const maybeEngageOrHold = () => {
     if (!state.magneticScroll) {
+      engaged = false;
+      upImpulse = 0;
+      return;
+    }
+    if (hasActiveSelectionInMessages()) {
       engaged = false;
       upImpulse = 0;
       return;
@@ -220,6 +245,7 @@ function createMagneticScrollController({ els, state }) {
       if (!state.magneticScroll) return;
       if (!engaged) return;
       if (!state.isStreaming) return;
+      if (hasActiveSelectionInMessages()) return;
       scrollToBottom();
     });
     observer.observe(el, { subtree: true, childList: true, characterData: true });
