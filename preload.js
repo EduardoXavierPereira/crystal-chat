@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
   ping: () => ipcRenderer.invoke('ping'),
+  restartAndUpdate: () => ipcRenderer.invoke('updater:restartAndUpdate'),
   ollamaCheck: () => ipcRenderer.invoke('ollama:check'),
   ollamaEnsureServer: () => ipcRenderer.invoke('ollama:ensureServer'),
   ollamaInstall: () => ipcRenderer.invoke('ollama:install'),
@@ -11,6 +12,30 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readLocalFile: (path) => ipcRenderer.invoke('tools:readLocalFile', { path }),
   webSearch: (query) => ipcRenderer.invoke('tools:webSearch', { query }),
   openLink: (url) => ipcRenderer.invoke('tools:openLink', { url }),
+  onUpdateAvailable: (callback) => {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('updater:update-available', listener);
+    return () => ipcRenderer.removeListener('updater:update-available', listener);
+  },
+  onUpdateDownloaded: (callback) => {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('updater:update-downloaded', listener);
+    return () => ipcRenderer.removeListener('updater:update-downloaded', listener);
+  },
+  onUpdateProgress: (callback) => {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('updater:download-progress', listener);
+    return () => ipcRenderer.removeListener('updater:download-progress', listener);
+  },
+  onUpdateError: (callback) => {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('updater:error', listener);
+    return () => ipcRenderer.removeListener('updater:error', listener);
+  },
   onOllamaSetupProgress: (callback) => {
     if (typeof callback !== 'function') return () => {};
     const listener = (_event, payload) => callback(payload);

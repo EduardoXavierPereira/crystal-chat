@@ -493,6 +493,7 @@ function createDockLayoutSaver(gl, rootEl) {
 export async function initDockLayout({ viewEls }) {
   injectDockStyles();
   moveToBodyIfPresent('confirm-modal');
+  moveToBodyIfPresent('update-modal');
   moveToBodyIfPresent('setup-modal');
 
   const rootEl = document.getElementById('dock-root');

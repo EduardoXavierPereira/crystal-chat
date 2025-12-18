@@ -1,4 +1,5 @@
 const { app, BrowserWindow, shell, ipcMain, dialog } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -13,6 +14,18 @@ const OLLAMA_BASE_URL = `http://${OLLAMA_HOST}`;
 
 let mainWindow = null;
 let ollamaServeProc = null;
+
+let updateAvailableInfo = null;
+
+function sendUpdaterEvent(channel, payload) {
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(channel, payload);
+    }
+  } catch {
+    // ignore
+  }
+}
 
 function findWindowsOllamaExe() {
   if (process.platform !== 'win32') return null;
@@ -518,6 +531,16 @@ function createWindow() {
 
   mainWindow = win;
 
+  win.webContents.on('did-finish-load', () => {
+    if (updateAvailableInfo) {
+      sendUpdaterEvent('updater:update-available', {
+        version: updateAvailableInfo?.version || null,
+        releaseName: updateAvailableInfo?.releaseName || null,
+        releaseNotes: updateAvailableInfo?.releaseNotes || null
+      });
+    }
+  });
+
   win.loadFile('renderer/index.html');
   win.maximize();
 
@@ -526,8 +549,58 @@ function createWindow() {
   }
 }
 
+function setupAutoUpdater() {
+  // Avoid running updater in dev (it will either error or spam logs)
+  if (!app.isPackaged) return;
+
+  // Keep behavior explicit: we only download/install after the user approves.
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = false;
+
+  autoUpdater.on('error', (err) => {
+    sendUpdaterEvent('updater:error', { message: err?.message || String(err) });
+  });
+
+  autoUpdater.on('update-available', (info) => {
+    updateAvailableInfo = info || null;
+    sendUpdaterEvent('updater:update-available', {
+      version: info?.version || null,
+      releaseName: info?.releaseName || null,
+      releaseNotes: info?.releaseNotes || null
+    });
+  });
+
+  autoUpdater.on('update-not-available', () => {
+    updateAvailableInfo = null;
+  });
+
+  autoUpdater.on('download-progress', (progress) => {
+    sendUpdaterEvent('updater:download-progress', {
+      percent: progress?.percent,
+      bytesPerSecond: progress?.bytesPerSecond,
+      transferred: progress?.transferred,
+      total: progress?.total
+    });
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    sendUpdaterEvent('updater:update-downloaded', {
+      version: info?.version || null,
+      releaseName: info?.releaseName || null
+    });
+  });
+
+  // Check shortly after launch to ensure the window is ready for IPC messages.
+  setTimeout(() => {
+    autoUpdater.checkForUpdates().catch(() => {
+      // ignore
+    });
+  }, 900);
+}
+
 app.whenReady().then(() => {
   createWindow();
+  setupAutoUpdater();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -547,6 +620,25 @@ app.on('before-quit', () => {
 
 // IPC for Ollama config passthrough if needed later
 ipcMain.handle('ping', () => 'pong');
+
+ipcMain.handle('updater:restartAndUpdate', async () => {
+  if (!app.isPackaged) return { ok: false, reason: 'not_packaged' };
+  try {
+    // If an update is available but not downloaded, download now.
+    if (updateAvailableInfo) {
+      try {
+        await autoUpdater.downloadUpdate();
+      } catch {
+        // ignore; may already be downloaded or may fail (handled by updater:error)
+      }
+    }
+    // quitAndInstall will run once the update is downloaded.
+    autoUpdater.quitAndInstall(false, true);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: 'failed', error: e?.message || String(e) };
+  }
+});
 
 ipcMain.handle('ollama:getApiUrl', async () => {
   return { apiUrl: `${OLLAMA_BASE_URL}/api/chat`, baseUrl: OLLAMA_BASE_URL, host: OLLAMA_HOST };

@@ -64,6 +64,8 @@ function getPendingTextFile() {
 let initCompleted = false;
 let setupSucceeded = false;
 
+let updateModalShown = false;
+
 let modelDropdown = null;
 
 let trashActions = null;
@@ -542,6 +544,102 @@ function hideSetupModal() {
   els.setupModalEl.classList.add('hidden');
 }
 
+function showUpdateModal(payload) {
+  if (!els.updateModalEl) return;
+  if (updateModalShown) return;
+  updateModalShown = true;
+
+  const version = payload?.version ? `v${payload.version}` : '';
+  const name = (payload?.releaseName || '').toString().trim();
+  const title = name || version || 'A new version is available.';
+
+  if (els.updateMessageEl) {
+    const lines = [];
+    lines.push(title);
+    const notes = payload?.releaseNotes;
+    if (typeof notes === 'string' && notes.trim()) {
+      lines.push('');
+      lines.push(notes.trim());
+    }
+    els.updateMessageEl.textContent = lines.join('\n');
+  }
+
+  if (els.updateRestartBtn) {
+    els.updateRestartBtn.disabled = false;
+    els.updateRestartBtn.textContent = 'Restart and update';
+  }
+
+  els.updateModalEl.classList.remove('hidden');
+  els.updateLaterBtn?.focus?.();
+}
+
+function hideUpdateModal() {
+  els.updateModalEl?.classList.add('hidden');
+}
+
+function attachUpdaterUIBindings() {
+  const api = window.electronAPI;
+  if (!api?.onUpdateAvailable) return;
+
+  api.onUpdateAvailable((payload) => {
+    showUpdateModal(payload);
+  });
+
+  api.onUpdateProgress?.((progress) => {
+    if (!els.updateModalEl || els.updateModalEl.classList.contains('hidden')) return;
+    const pct = Number(progress?.percent);
+    if (!Number.isFinite(pct)) return;
+    if (els.updateRestartBtn) {
+      els.updateRestartBtn.disabled = true;
+      els.updateRestartBtn.textContent = `Downloading… ${Math.round(Math.max(0, Math.min(100, pct)))}%`;
+    }
+  });
+
+  api.onUpdateDownloaded?.(() => {
+    if (els.updateRestartBtn) {
+      els.updateRestartBtn.disabled = false;
+      els.updateRestartBtn.textContent = 'Restart and update';
+    }
+  });
+
+  api.onUpdateError?.(() => {
+    if (els.updateRestartBtn) {
+      els.updateRestartBtn.disabled = false;
+      els.updateRestartBtn.textContent = 'Restart and update';
+    }
+  });
+
+  els.updateLaterBtn?.addEventListener('click', () => {
+    hideUpdateModal();
+  });
+
+  els.updateRestartBtn?.addEventListener('click', async () => {
+    if (!api?.restartAndUpdate) return;
+    try {
+      if (els.updateRestartBtn) {
+        els.updateRestartBtn.disabled = true;
+        els.updateRestartBtn.textContent = 'Preparing update…';
+      }
+      await api.restartAndUpdate();
+    } catch {
+      if (els.updateRestartBtn) {
+        els.updateRestartBtn.disabled = false;
+        els.updateRestartBtn.textContent = 'Restart and update';
+      }
+    }
+  });
+
+  els.updateModalEl?.addEventListener('click', (e) => {
+    if (e.target === els.updateModalEl) hideUpdateModal();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && els.updateModalEl && !els.updateModalEl.classList.contains('hidden')) {
+      hideUpdateModal();
+    }
+  });
+}
+
 function appendSetupLogLine(line) {
   if (els.setupMessageEl) {
     const current = (els.setupMessageEl.textContent || '').toString();
@@ -599,7 +697,15 @@ async function continueInitAfterSetup() {
     // ignore
   }
 
-  db = await openDB();
+  try {
+    db = await openDB();
+  } catch (e) {
+    showError(
+      els.errorEl,
+      'Failed to open local database (IndexedDB). Your local storage may be corrupted. Close the app and back up/reset the app data folder, then try again.'
+    );
+    return;
+  }
   await purgeExpiredTrashedChats(db, TRASH_RETENTION_MS);
   setInterval(() => {
     purgeExpiredTrashedChats(db, TRASH_RETENTION_MS)
@@ -939,6 +1045,8 @@ runInit({
   },
   getRuntimeApiUrl: () => runtimeApiUrl
 });
+
+attachUpdaterUIBindings();
 
 // UI bindings extracted to uiBindings.js
 
