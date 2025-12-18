@@ -14,10 +14,11 @@
     "e2e:open": "start-server-and-test serve:renderer http://localhost:4177 cypress:open",
     "cypress:open": "cypress open",
     "cypress:run": "cypress run",
-    "dist": "electron-builder",
-    "dist:win": "electron-builder --win",
-    "dist:mac": "electron-builder --mac",
-    "dist:linux": "electron-builder --linux"
+    "dist": "node -e \"require('fs').mkdirSync('node_modules/@napi-rs/canvas-android-arm64',{recursive:true})\" && electron-builder",
+    "dist:win": "node -e \"require('fs').mkdirSync('node_modules/@napi-rs/canvas-android-arm64',{recursive:true})\" && electron-builder --win",
+    "dist:win:publish": "node -e \"require('fs').mkdirSync('node_modules/@napi-rs/canvas-android-arm64',{recursive:true})\" && electron-builder --win --publish always",
+    "dist:mac": "node -e \"require('fs').mkdirSync('node_modules/@napi-rs/canvas-android-arm64',{recursive:true})\" && electron-builder --mac",
+    "dist:linux": "node -e \"require('fs').mkdirSync('node_modules/@napi-rs/canvas-android-arm64',{recursive:true})\" && electron-builder --linux"
   },
   "keywords": [
     "electron",
@@ -43,6 +44,7 @@
     "files": [
       "**/*",
       "!dist/*",
+      "!node_modules/*",
       "!node_modules/.cache/*",
       "!cypress/*",
       "!cypress.config.js",
