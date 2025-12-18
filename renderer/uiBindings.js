@@ -847,6 +847,12 @@ export function attachUIBindings({
     togglePinnedOpen?.();
   });
 
+  els.foldersToggleBtn?.addEventListener('click', () => {
+    state.foldersOpen = !(typeof state.foldersOpen === 'boolean' ? state.foldersOpen : true);
+    saveUIState(state);
+    renderChatsUI();
+  });
+
   els.trashSearchInput?.addEventListener('input', () => {
     state.trashQuery = (els.trashSearchInput.value || '').trim().toLowerCase();
     onTrashSearchInput?.();
@@ -900,9 +906,140 @@ export function attachUIBindings({
     if (e.target === els.confirmModalEl) closeConfirm(els, (v) => (state.confirmAction = v));
   });
 
+  const selectionAsk = (() => {
+    let btn = null;
+    let raf = null;
+
+    const hide = () => {
+      if (!btn) return;
+      btn.classList.add('hidden');
+      btn.removeAttribute('data-selection-text');
+    };
+
+    const ensureBtn = () => {
+      if (btn) return btn;
+      btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'selection-ask-btn hidden';
+      btn.textContent = 'Ask Crystal Chat';
+      btn.addEventListener(
+        'click',
+        (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+
+          const text = (btn?.getAttribute('data-selection-text') || '').toString();
+          if (!text) return;
+
+          const cap = 200000;
+          const clipped = text.length > cap ? `${text.slice(0, cap)}\n\n[...truncated...]` : text;
+          state.pendingTextFile = {
+            name: 'Selection.txt',
+            type: 'text/plain',
+            size: clipped.length,
+            text: clipped
+          };
+          renderPromptAttachments();
+          hide();
+          try {
+            els.promptInput?.focus();
+          } catch {
+            // ignore
+          }
+        },
+        { signal: bindingsAbort.signal }
+      );
+
+      document.body.appendChild(btn);
+      bindingsAbort.signal.addEventListener(
+        'abort',
+        () => {
+          try {
+            btn?.remove();
+          } catch {
+            // ignore
+          }
+          btn = null;
+        },
+        { once: true }
+      );
+
+      return btn;
+    };
+
+    const getSelectionState = () => {
+      try {
+        const sel = window.getSelection?.();
+        if (!sel) return null;
+        if (sel.type !== 'Range') return null;
+        if (sel.rangeCount <= 0) return null;
+        const range = sel.getRangeAt(0);
+        const rawText = (sel.toString?.() || '').toString();
+        const text = rawText.trim();
+        if (!text) return null;
+
+        const node = range?.commonAncestorContainer;
+        const el = node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
+        if (!el) return null;
+
+        const assistantContent = el.closest?.('.message.assistant .message-content');
+        if (!assistantContent) return null;
+
+        const rect = range.getBoundingClientRect?.();
+        if (!rect || !Number.isFinite(rect.left) || !Number.isFinite(rect.top)) return null;
+        if (rect.width <= 0 && rect.height <= 0) return null;
+
+        return { text, rect };
+      } catch {
+        return null;
+      }
+    };
+
+    const positionBtn = ({ rect }) => {
+      const b = ensureBtn();
+      const pad = 8;
+      const x = Math.max(8, Math.round(rect.right + window.scrollX + pad));
+      const y = Math.max(8, Math.round(rect.top + window.scrollY - 6));
+      b.style.left = `${x}px`;
+      b.style.top = `${y}px`;
+    };
+
+    const update = () => {
+      if (raf) return;
+      raf = window.requestAnimationFrame(() => {
+        raf = null;
+        const s = getSelectionState();
+        if (!s) {
+          hide();
+          return;
+        }
+        const b = ensureBtn();
+        b.setAttribute('data-selection-text', s.text);
+        positionBtn(s);
+        b.classList.remove('hidden');
+      });
+    };
+
+    const onDocMouseDown = (e) => {
+      const t = e?.target;
+      if (!t || !(t instanceof Element)) return;
+      if (t.closest?.('.selection-ask-btn')) return;
+      hide();
+    };
+
+    return { update, hide, onDocMouseDown };
+  })();
+
+  document.addEventListener('selectionchange', () => selectionAsk.update(), { signal: bindingsAbort.signal });
+  document.addEventListener('mouseup', () => selectionAsk.update(), { signal: bindingsAbort.signal });
+  document.addEventListener('keyup', () => selectionAsk.update(), { signal: bindingsAbort.signal });
+  window.addEventListener('blur', () => selectionAsk.hide(), { signal: bindingsAbort.signal, capture: true });
+  window.addEventListener('scroll', () => selectionAsk.hide(), { signal: bindingsAbort.signal, capture: true });
+  document.addEventListener('mousedown', (e) => selectionAsk.onDocMouseDown(e), { signal: bindingsAbort.signal, capture: true });
+
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && els.confirmModalEl && !els.confirmModalEl.classList.contains('hidden')) {
       closeConfirm(els, (v) => (state.confirmAction = v));
     }
   });
-}
+ }

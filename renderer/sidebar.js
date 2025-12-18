@@ -44,6 +44,7 @@ export function getEls() {
     errorEl: document.getElementById('error'),
     newChatBtn: document.getElementById('new-chat'),
     pinnedBtn: document.getElementById('pinned-btn'),
+    foldersToggleBtn: document.getElementById('folders-toggle-btn'),
     pinnedDropdownEl: document.getElementById('pinned-dropdown'),
     pinnedDropdownListEl: document.getElementById('pinned-dropdown-list'),
     foldersListEl: document.getElementById('folders-list'),

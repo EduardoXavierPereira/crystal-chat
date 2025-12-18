@@ -226,13 +226,15 @@ export function updateRenderedMessage({ els, msg, messageIndex } = {}) {
   // Update assistant content
   const contentEl = root.querySelector('.message-content');
   if (contentEl) {
-    const shouldRenderMarkdown = msg.role === 'assistant' && window.marked && !!msg._done;
+    const shouldRenderMarkdown = msg.role === 'assistant' && window.marked && !freezeThisMessageDuringStream;
     if (shouldRenderMarkdown) {
+      const now = Date.now();
+      const last = Number.isFinite(msg._lastStreamMarkdownRenderTs) ? msg._lastStreamMarkdownRenderTs : 0;
+      if (!msg._done && now - last < 150) return true;
+      msg._lastStreamMarkdownRenderTs = now;
       contentEl.innerHTML = sanitizeAssistantHtml(window.marked.parse(msg.content || ''));
     } else {
       if (freezeThisMessageDuringStream) return true;
-      // While streaming, avoid replacing the entire contents (which breaks selection).
-      // Keep a stable text node and only update its value.
       const nextText = (msg.content || '').toString();
       let textNode = contentEl.firstChild;
       if (!textNode || textNode.nodeType !== Node.TEXT_NODE || contentEl.childNodes.length !== 1) {

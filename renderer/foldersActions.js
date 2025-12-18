@@ -121,6 +121,22 @@ export function createFoldersActions({ els, state, saveUIState, renderChatsUI, a
   function renderFoldersUI() {
     ensureFoldersInitialized();
 
+    try {
+      const open = typeof state.foldersOpen === 'boolean' ? state.foldersOpen : true;
+      const group = els.foldersListEl?.closest?.('.folders-group');
+      group?.classList?.toggle?.('collapsed', !open);
+      els.foldersToggleBtn?.classList?.toggle?.('open', !!open);
+      els.foldersToggleBtn?.setAttribute?.('aria-expanded', open ? 'true' : 'false');
+    } catch {
+      // ignore
+    }
+
+    const open = typeof state.foldersOpen === 'boolean' ? state.foldersOpen : true;
+    if (!open) {
+      if (els.foldersListEl) els.foldersListEl.innerHTML = '';
+      return;
+    }
+
     const activeChatId = state.sidebarSelection?.kind === 'chat' ? state.sidebarSelection.id : null;
 
     renderFoldersTree({
@@ -176,6 +192,23 @@ export function createFoldersActions({ els, state, saveUIState, renderChatsUI, a
       },
       activeChatId
     });
+
+    try {
+      if (els.foldersListEl) {
+        const newBtn = document.createElement('button');
+        newBtn.type = 'button';
+        newBtn.className = 'button button-ghost folders-new-inline';
+        newBtn.textContent = '+ New';
+        newBtn.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          requestCreateFolder();
+        };
+        els.foldersListEl.insertBefore(newBtn, els.foldersListEl.firstChild);
+      }
+    } catch {
+      // ignore
+    }
   }
 
   function handleDrop(e, targetFolderId) {
@@ -270,10 +303,6 @@ export function createFoldersActions({ els, state, saveUIState, renderChatsUI, a
   }
 
   function attachBindings() {
-    els.foldersNewBtn?.addEventListener('click', () => {
-      requestCreateFolder();
-    });
-
     els.folderCreateCancelBtn?.addEventListener('click', () => {
       closeCreateFolderModal();
     });

@@ -24,6 +24,7 @@ export function createInitialState() {
     temporaryChatEnabled: false,
     tempChat: null,
     pinnedOpen: false,
+    foldersOpen: true,
     selectedModel: MODEL,
     creativity: 1,
     textSize: 1,
@@ -41,6 +42,7 @@ export function saveUIState(state) {
     const toSave = {
       chatQuery: (state.chatQuery || '').toString(),
       pinnedOpen: !!state.pinnedOpen,
+      foldersOpen: typeof state.foldersOpen === 'boolean' ? state.foldersOpen : true,
       selectedModel: (state.selectedModel || MODEL).toString(),
       creativity: Number.isFinite(state.creativity) ? state.creativity : 1,
       randomness: Number.isFinite(state.creativity) ? state.creativity : 1,
@@ -83,6 +85,9 @@ export function loadUIState() {
       }
       if (!Array.isArray(parsed.folders)) {
         parsed.folders = [];
+      }
+      if (typeof parsed.foldersOpen === 'undefined') {
+        parsed.foldersOpen = true;
       }
     }
     return parsed;
