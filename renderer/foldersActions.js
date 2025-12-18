@@ -50,25 +50,67 @@ function isDescendantFolderId(rootFolder, maybeChildId) {
 function removeChatFromAllFolders(folders, chatId) {
   visitFolders(folders, (f) => {
     if (!Array.isArray(f.chatIds)) return;
-    const idx = f.chatIds.indexOf(chatId);
-    if (idx >= 0) f.chatIds.splice(idx, 1);
+    const wanted = (chatId || '').toString().trim();
+    if (!wanted) return;
+    const dbg = (() => {
+      try {
+        return !!window.__ccDebugFolders;
+      } catch {
+        return false;
+      }
+    })();
+    // Remove all occurrences to avoid duplicates keeping the chat hidden.
+    for (let i = f.chatIds.length - 1; i >= 0; i--) {
+      if ((f.chatIds[i] || '').toString().trim() === wanted) {
+        if (dbg) {
+          try {
+            console.debug('[folders] removeChatFromAllFolders', { folderId: f.id, chatId: wanted });
+          } catch {
+            // ignore
+          }
+        }
+        f.chatIds.splice(i, 1);
+      }
+    }
   });
 }
 
 function removeChatFromFolderById(folders, folderId, chatId) {
   const folder = findFolder(folders, folderId);
   if (!folder || !Array.isArray(folder.chatIds)) return false;
-  const idx = folder.chatIds.indexOf(chatId);
-  if (idx < 0) return false;
-  folder.chatIds.splice(idx, 1);
-  return true;
+  const wanted = (chatId || '').toString().trim();
+  if (!wanted) return false;
+  let removed = false;
+  for (let i = folder.chatIds.length - 1; i >= 0; i--) {
+    if ((folder.chatIds[i] || '').toString().trim() === wanted) {
+      folder.chatIds.splice(i, 1);
+      removed = true;
+    }
+  }
+  return removed;
 }
 
 function getAllFolderChatIds(folders) {
   const out = new Set();
   visitFolders(folders, (f) => {
-    (f.chatIds || []).forEach((id) => out.add(id));
+    (f.chatIds || []).forEach((id) => {
+      const v = (id || '').toString().trim();
+      if (v) out.add(v);
+    });
   });
+  return out;
+}
+
+function listFoldersFlat(folders) {
+  const out = [];
+  const walk = (arr, depth) => {
+    (arr || []).forEach((f) => {
+      if (!f) return;
+      out.push({ id: f.id, name: (f.name || 'Folder').toString(), depth: depth || 0 });
+      walk(f.folders || [], (depth || 0) + 1);
+    });
+  };
+  walk(folders, 0);
   return out;
 }
 
@@ -79,11 +121,36 @@ export function createFoldersActions({ els, state, saveUIState, renderChatsUI, a
 
   function ensureFoldersInitialized() {
     if (!Array.isArray(state.folders)) state.folders = [];
+    if (!Array.isArray(state.rootChatIds)) state.rootChatIds = [];
+  }
+
+  function removeChatFromRootList(chatId) {
+    const id = (chatId || '').toString().trim();
+    if (!id) return;
+    for (let i = state.rootChatIds.length - 1; i >= 0; i--) {
+      if ((state.rootChatIds[i] || '').toString().trim() === id) state.rootChatIds.splice(i, 1);
+    }
+  }
+
+  function addChatToRootList(chatId) {
+    const id = (chatId || '').toString().trim();
+    if (!id) return;
+    const exists = state.rootChatIds.some((x) => (x || '').toString().trim() === id);
+    if (!exists) state.rootChatIds.push(id);
   }
 
   function createFolderAtRoot(name) {
     ensureFoldersInitialized();
     state.folders.push({ id: newId(), name: (name || 'Folder').toString(), open: true, folders: [], chatIds: [] });
+    saveUIState(state);
+    renderChatsUI();
+  }
+
+  function removeChatFromRoot(chatId) {
+    ensureFoldersInitialized();
+    const id = (chatId || '').toString().trim();
+    if (!id) return;
+    removeChatFromRootList(id);
     saveUIState(state);
     renderChatsUI();
   }
@@ -116,6 +183,17 @@ export function createFoldersActions({ els, state, saveUIState, renderChatsUI, a
     f.open = !f.open;
     saveUIState(state);
     renderChatsUI();
+
+    if (!folderId) {
+      try {
+        window.requestAnimationFrame(() => {
+          const el = document.querySelector(`[data-chat-id="${CSS.escape(id)}"]`);
+          el?.scrollIntoView?.({ block: 'nearest' });
+        });
+      } catch {
+        // ignore
+      }
+    }
   }
 
   function renderFoldersUI() {
@@ -127,6 +205,7 @@ export function createFoldersActions({ els, state, saveUIState, renderChatsUI, a
       group?.classList?.toggle?.('collapsed', !open);
       els.foldersToggleBtn?.classList?.toggle?.('open', !!open);
       els.foldersToggleBtn?.setAttribute?.('aria-expanded', open ? 'true' : 'false');
+      els.foldersChevronEl?.classList?.toggle?.('open', !!open);
     } catch {
       // ignore
     }
@@ -192,23 +271,6 @@ export function createFoldersActions({ els, state, saveUIState, renderChatsUI, a
       },
       activeChatId
     });
-
-    try {
-      if (els.foldersListEl) {
-        const newBtn = document.createElement('button');
-        newBtn.type = 'button';
-        newBtn.className = 'button button-ghost folders-new-inline';
-        newBtn.textContent = '+ New';
-        newBtn.onclick = (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          requestCreateFolder();
-        };
-        els.foldersListEl.insertBefore(newBtn, els.foldersListEl.firstChild);
-      }
-    } catch {
-      // ignore
-    }
   }
 
   function handleDrop(e, targetFolderId) {
@@ -238,14 +300,19 @@ export function createFoldersActions({ els, state, saveUIState, renderChatsUI, a
     if (!payload || !payload.kind || !payload.id) return;
 
     if (payload.kind === 'chat') {
-      const chatId = payload.id;
+      const chatId = (payload.id || '').toString().trim();
+      if (!chatId) return;
       removeChatFromAllFolders(state.folders, chatId);
       if (targetFolderId) {
+        removeChatFromRootList(chatId);
         const target = findFolder(state.folders, targetFolderId);
         if (!target) return;
         if (!Array.isArray(target.chatIds)) target.chatIds = [];
-        target.chatIds.push(chatId);
+        const exists = target.chatIds.some((x) => (x || '').toString().trim() === chatId);
+        if (!exists) target.chatIds.push(chatId);
         target.open = true;
+      } else {
+        addChatToRootList(chatId);
       }
       saveUIState(state);
       renderChatsUI();
@@ -281,6 +348,132 @@ export function createFoldersActions({ els, state, saveUIState, renderChatsUI, a
     }
   }
 
+  function moveChatToFolder(chatId, targetFolderId) {
+    ensureFoldersInitialized();
+    const id = (chatId || '').toString().trim();
+    if (!id) return;
+    const folderId = targetFolderId == null ? null : (targetFolderId || '').toString().trim();
+    try {
+      window.__ccLastChatId = id;
+      window.__ccLastFolderId = folderId;
+      window.__ccLastFolderAction = 'moveChatToFolder';
+    } catch {
+      // ignore
+    }
+    const dbg = (() => {
+      try {
+        return !!window.__ccDebugFolders;
+      } catch {
+        return false;
+      }
+    })();
+    const beforeHidden = dbg ? getAllFolderChatIds(state.folders) : null;
+    if (dbg) {
+      try {
+        console.debug('[folders] moveChatToFolder', { chatId: id, targetFolderId: folderId });
+      } catch {
+        // ignore
+      }
+    }
+    removeChatFromAllFolders(state.folders, id);
+    if (folderId) {
+      removeChatFromRootList(id);
+      const target = findFolder(state.folders, folderId);
+      if (!target) return;
+      if (!Array.isArray(target.chatIds)) target.chatIds = [];
+      const exists = target.chatIds.some((x) => (x || '').toString().trim() === id);
+      if (!exists) target.chatIds.push(id);
+      target.open = true;
+    } else {
+      addChatToRootList(id);
+    }
+    try {
+      window.__ccLastFolders = JSON.parse(JSON.stringify(state.folders || []));
+    } catch {
+      // ignore
+    }
+    if (dbg) {
+      try {
+        const afterHidden = getAllFolderChatIds(state.folders);
+        console.debug('[folders] moveChatToFolder hiddenSet', {
+          chatId: id,
+          beforeHas: beforeHidden?.has?.(id),
+          afterHas: afterHidden?.has?.(id),
+          beforeSize: beforeHidden?.size,
+          afterSize: afterHidden?.size
+        });
+      } catch {
+        // ignore
+      }
+    }
+    saveUIState(state);
+    renderChatsUI();
+
+    if (!folderId) {
+      try {
+        window.requestAnimationFrame(() => {
+          const el = document.querySelector(`[data-chat-id="${CSS.escape(id)}"]`);
+          el?.scrollIntoView?.({ block: 'nearest' });
+        });
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  function removeChatFromFolders(chatId) {
+    ensureFoldersInitialized();
+    const id = (chatId || '').toString().trim();
+    if (!id) return;
+    try {
+      window.__ccLastChatId = id;
+      window.__ccLastFolderId = null;
+      window.__ccLastFolderAction = 'removeChatFromFolders';
+    } catch {
+      // ignore
+    }
+    const dbg = (() => {
+      try {
+        return !!window.__ccDebugFolders;
+      } catch {
+        return false;
+      }
+    })();
+    const beforeHidden = dbg ? getAllFolderChatIds(state.folders) : null;
+    removeChatFromAllFolders(state.folders, id);
+    try {
+      window.__ccLastFolders = JSON.parse(JSON.stringify(state.folders || []));
+    } catch {
+      // ignore
+    }
+    if (dbg) {
+      try {
+        const afterHidden = getAllFolderChatIds(state.folders);
+        console.debug('[folders] removeChatFromFolders hiddenSet', {
+          chatId: id,
+          beforeHas: beforeHidden?.has?.(id),
+          afterHas: afterHidden?.has?.(id),
+          beforeSize: beforeHidden?.size,
+          afterSize: afterHidden?.size
+        });
+      } catch {
+        // ignore
+      }
+    }
+    saveUIState(state);
+    renderChatsUI();
+  }
+
+  function getFoldersFlat() {
+    ensureFoldersInitialized();
+    return listFoldersFlat(state.folders);
+  }
+
+  function getRootChatIdSet() {
+    ensureFoldersInitialized();
+    return new Set((state.rootChatIds || []).map((x) => (x || '').toString().trim()).filter(Boolean));
+  }
+
   function onDragStartFromChatList(e, chatId) {
     try {
       const payload = JSON.stringify({ kind: 'chat', id: chatId });
@@ -299,10 +492,57 @@ export function createFoldersActions({ els, state, saveUIState, renderChatsUI, a
 
   function getHiddenChatIdSet() {
     ensureFoldersInitialized();
-    return getAllFolderChatIds(state.folders);
+    const out = getAllFolderChatIds(state.folders);
+    (state.rootChatIds || []).forEach((x) => {
+      const v = (x || '').toString().trim();
+      if (v) out.add(v);
+    });
+    return out;
   }
 
   function attachBindings() {
+    els.foldersNewBtn?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      requestCreateFolder();
+    });
+
+    try {
+      const headerEl = els.foldersToggleBtn?.closest?.('.folders-header');
+      let lastHeaderDropAt = 0;
+      headerEl?.addEventListener('click', (e) => {
+        const t = e?.target;
+        if (!(t instanceof Element)) return;
+        if (t.closest?.('#folders-new-btn')) return;
+        if (t.closest?.('#folders-toggle-btn')) return;
+        if (Date.now() - lastHeaderDropAt < 450) return;
+        els.foldersToggleBtn?.click();
+      });
+
+      const onHeaderDragOver = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        try {
+          e.dataTransfer.dropEffect = 'move';
+        } catch {
+          // ignore
+        }
+      };
+
+      const onHeaderDrop = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        lastHeaderDropAt = Date.now();
+        handleDrop(e, null);
+      };
+
+      headerEl?.addEventListener('dragenter', onHeaderDragOver, true);
+      headerEl?.addEventListener('dragover', onHeaderDragOver, true);
+      headerEl?.addEventListener('drop', onHeaderDrop, true);
+    } catch {
+      // ignore
+    }
+
     els.folderCreateCancelBtn?.addEventListener('click', () => {
       closeCreateFolderModal();
     });
@@ -340,6 +580,11 @@ export function createFoldersActions({ els, state, saveUIState, renderChatsUI, a
     toggleFolderOpen,
     requestCreateFolder,
     onDragStartFromChatList,
-    getHiddenChatIdSet
+    getHiddenChatIdSet,
+    getRootChatIdSet,
+    moveChatToFolder,
+    removeChatFromFolders,
+    removeChatFromRoot,
+    getFoldersFlat
   };
 }

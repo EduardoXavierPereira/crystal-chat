@@ -1007,38 +1007,6 @@ export function renderActiveChat({
     els.chatHeaderTokensEl.textContent = `${estTokens} tokens`;
   }
 
-  if (els.pinChatToggleEl) {
-    const isTemp = !!chat && chat.id === tempChatId;
-    const pinned = !!(chat && (chat.pinnedAt || chat.favoriteAt));
-    els.pinChatToggleEl.innerHTML = '';
-    const t = createToggle({
-      id: 'pin-chat-toggle-input',
-      text: 'Pin chat',
-      checked: pinned,
-      disabled: !chat || isTemp,
-      className: '',
-      switchOnRight: false,
-      showText: false,
-      onChange: () => {
-        // actual persistence is handled by the click handler bound in uiBindings
-      }
-    });
-    // Use click on the label (not change) so we can keep persistence in one place.
-    t.el.addEventListener('click', (e) => {
-      // Allow checkbox toggle UI, but don't let it double toggle
-      e.preventDefault();
-      e.stopPropagation();
-      if (t.input.disabled) return;
-      t.setChecked(!t.input.checked);
-      const id = state.sidebarSelection.kind === 'chat' ? state.sidebarSelection.id : null;
-      if (!id || id === tempChatId) return;
-      // Fire a synthetic event that uiBindings listens to (custom)
-      const ev = new CustomEvent('cc:togglePinnedChat', { detail: { id } });
-      window.dispatchEvent(ev);
-    });
-    els.pinChatToggleEl.appendChild(t.el);
-  }
-
   let messagesScrollTop = 0;
   try {
     messagesScrollTop = els.messagesEl.scrollTop;

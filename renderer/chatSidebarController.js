@@ -7,7 +7,6 @@ export function createChatSidebarController({
   renderActiveChatUI,
   commitRename,
   getTrashActions,
-  getPinnedActions,
   getFoldersActions,
   focusDockView
 }) {
@@ -47,11 +46,13 @@ export function createChatSidebarController({
         }
       },
       onTrashChat: (id) => getTrashActions()?.handleTrashChat(id),
-      onTogglePinned: (id) => getPinnedActions()?.togglePinned(id),
+      onMoveChatToFolder: (chatId, folderId) => foldersActions?.moveChatToFolder?.(chatId, folderId),
+      onRemoveChatFromFolders: (chatId) => foldersActions?.removeChatFromFolders?.(chatId),
+      getFoldersFlat: () => foldersActions?.getFoldersFlat?.() || [],
+      hiddenChatIds: foldersActions?.getHiddenChatIdSet?.(),
       onDragStartChat: (e, id) => foldersActions?.onDragStartFromChatList?.(e, id)
     });
 
-    getPinnedActions()?.renderPinnedDropdownUI();
     foldersActions?.renderFoldersUI?.();
   }
 

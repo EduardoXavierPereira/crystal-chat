@@ -23,7 +23,6 @@ export function createInitialState() {
     confirmAction: null,
     temporaryChatEnabled: false,
     tempChat: null,
-    pinnedOpen: false,
     foldersOpen: true,
     selectedModel: MODEL,
     creativity: 1,
@@ -33,6 +32,7 @@ export function createInitialState() {
     enableInternet: false,
     updateMemoryEnabled: true,
     folders: [],
+    rootChatIds: [],
     sidebarSelection: { kind: 'chat', id: null }
   };
 }
@@ -41,7 +41,6 @@ export function saveUIState(state) {
   try {
     const toSave = {
       chatQuery: (state.chatQuery || '').toString(),
-      pinnedOpen: !!state.pinnedOpen,
       foldersOpen: typeof state.foldersOpen === 'boolean' ? state.foldersOpen : true,
       selectedModel: (state.selectedModel || MODEL).toString(),
       creativity: Number.isFinite(state.creativity) ? state.creativity : 1,
@@ -54,6 +53,7 @@ export function saveUIState(state) {
       theme: (state.theme || 'system').toString(),
       accent: (state.accent || '#7fc9ff').toString(),
       folders: Array.isArray(state.folders) ? state.folders : [],
+      rootChatIds: Array.isArray(state.rootChatIds) ? state.rootChatIds : [],
       sidebarSelection:
         state.sidebarSelection.kind === 'chat' && state.sidebarSelection.id === TEMP_CHAT_ID
           ? { kind: 'chat', id: null }
@@ -85,6 +85,9 @@ export function loadUIState() {
       }
       if (!Array.isArray(parsed.folders)) {
         parsed.folders = [];
+      }
+      if (!Array.isArray(parsed.rootChatIds)) {
+        parsed.rootChatIds = [];
       }
       if (typeof parsed.foldersOpen === 'undefined') {
         parsed.foldersOpen = true;

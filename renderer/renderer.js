@@ -18,12 +18,10 @@ import {
 
 import { autosizePrompt, showError, hideError, openConfirm, closeConfirm } from './input.js';
 import { renderTrash } from './trash.js';
-import { renderPinnedDropdown } from './pinned.js';
 import { renderActiveChat, updateRenderedMessage } from './messages.js';
 import { createCustomDropdown } from './customDropdown.js';
 import { formatModelName } from './formatModelName.js';
 import { createTrashActions } from './trashActions.js';
-import { createPinnedActions } from './pinnedActions.js';
 import { createFoldersActions } from './foldersActions.js';
 import { createChatSidebarController } from './chatSidebarController.js';
 import { createStreamingController } from './streamingController.js';
@@ -38,6 +36,12 @@ import { initDockLayout, setDockStatus } from './dockLayout.js';
 
 const els = getEls();
 const state = createInitialState();
+
+try {
+  window.__ccState = state;
+} catch {
+  // ignore
+}
 
 let runtimeApiUrl = null;
 
@@ -74,8 +78,6 @@ let updateModalShown = false;
 let modelDropdown = null;
 
 let trashActions = null;
-
-let pinnedActions = null;
 
 let memoriesActions = null;
 
@@ -784,7 +786,6 @@ async function continueInitAfterSetup() {
   state.chats = await loadChats(db);
   const ui = loadUIState();
   const savedSel = ui?.sidebarSelection;
-  state.pinnedOpen = !!(ui?.pinnedOpen ?? ui?.favoritesOpen);
   state.chatQuery = (ui?.chatQuery || '').toString();
   state.selectedModel = (ui?.selectedModel || state.selectedModel || MODEL).toString();
   state.creativity = clampNumber(ui?.creativity ?? ui?.randomness, 0, 2, state.creativity);
@@ -796,6 +797,7 @@ async function continueInitAfterSetup() {
   state.theme = (ui?.theme || state.theme || 'system').toString();
   state.accent = (ui?.accent || state.accent || '#7fc9ff').toString();
   state.folders = Array.isArray(ui?.folders) ? ui.folders : [];
+  state.rootChatIds = Array.isArray(ui?.rootChatIds) ? ui.rootChatIds : [];
   clearPendingImage();
   applyThemeAndAccent(state);
 
@@ -884,15 +886,6 @@ async function continueInitAfterSetup() {
   updateStatusText();
   updatePromptPlaceholder();
 
-  const migrated = [];
-  state.chats.forEach((chat) => {
-    if (chat.favoriteAt && !chat.pinnedAt) {
-      chat.pinnedAt = chat.favoriteAt;
-      delete chat.favoriteAt;
-      migrated.push(chat);
-    }
-  });
-
   memoriesActions = createMemoriesActions({
     db,
     els,
@@ -902,10 +895,6 @@ async function continueInitAfterSetup() {
     embeddingModel: DEFAULT_EMBEDDING_MODEL,
     showError
   });
-
-  if (migrated.length > 0) {
-    await Promise.all(migrated.map((c) => saveChat(db, c)));
-  }
   if (savedSel && savedSel.kind === 'trash') {
     state.sidebarSelection = { kind: 'trash' };
   } else if (savedSel && savedSel.kind === 'favorites') {
@@ -923,18 +912,6 @@ async function continueInitAfterSetup() {
   }
 
   state.pendingNew = state.sidebarSelection.kind === 'chat' && state.sidebarSelection.id === null;
-  pinnedActions = createPinnedActions({
-    db,
-    els,
-    state,
-    saveChat,
-    renderPinnedDropdown,
-    saveUIState,
-    applySidebarSelection: (sel) => chatSidebarController?.applySidebarSelection(sel),
-    renderChatsUI,
-    renderActiveChatUI
-  });
-
   foldersActions = createFoldersActions({
     els,
     state,
@@ -944,6 +921,31 @@ async function continueInitAfterSetup() {
   });
 
   foldersActions?.attachBindings?.();
+
+  window.addEventListener('cc:moveChatToFolder', (e) => {
+    const chatId = e?.detail?.chatId;
+    const folderId = e?.detail?.folderId ?? null;
+    if (typeof chatId !== 'string' || !chatId) return;
+    foldersActions?.moveChatToFolder?.(chatId, folderId);
+  });
+
+  window.addEventListener('cc:removeChatFromFolders', (e) => {
+    const chatId = e?.detail?.chatId;
+    if (typeof chatId !== 'string' || !chatId) return;
+    foldersActions?.removeChatFromFolders?.(chatId);
+  });
+
+  window.addEventListener('cc:removeChatFromRoot', (e) => {
+    const chatId = e?.detail?.chatId;
+    if (typeof chatId !== 'string' || !chatId) return;
+    foldersActions?.removeChatFromRoot?.(chatId);
+  });
+
+  window.addEventListener('cc:trashChat', (e) => {
+    const chatId = e?.detail?.chatId;
+    if (typeof chatId !== 'string' || !chatId) return;
+    trashActions?.handleTrashChat?.(chatId);
+  });
 
   trashActions = createTrashActions({
     db,
@@ -1010,7 +1012,6 @@ async function continueInitAfterSetup() {
     renderActiveChatUI,
     commitRename,
     getTrashActions: () => trashActions,
-    getPinnedActions: () => pinnedActions,
     getFoldersActions: () => foldersActions,
     focusDockView
   });
@@ -1063,8 +1064,6 @@ async function continueInitAfterSetup() {
     abortStreaming: () => streamingController?.abort(),
     applySidebarSelection: (sel) => chatSidebarController?.applySidebarSelection(sel),
     focusDockView,
-    togglePinnedOpen: () => pinnedActions?.togglePinnedOpen(),
-    togglePinnedChat: async (id) => pinnedActions?.togglePinned(id),
     onMemoriesSearchInput: () => memoriesActions?.renderMemoriesUI(),
     onMemoriesAdd: async (text) => memoriesActions?.addMemoryFromText(text),
     onMemoriesOpen: () => memoriesActions?.renderMemoriesUI(),

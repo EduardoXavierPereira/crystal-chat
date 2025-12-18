@@ -902,8 +902,17 @@ html[data-theme="light"] #new-chat.button-ghost:not(.active):hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   padding: 8px 10px;
   border-bottom: 1px solid var(--border);
+}
+
+.folders-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
 }
 
 .folders-toggle-btn {
@@ -911,7 +920,7 @@ html[data-theme="light"] #new-chat.button-ghost:not(.active):hover {
   align-items: center;
   justify-content: flex-start;
   gap: 8px;
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   border: 0;
   background: transparent;
@@ -922,16 +931,26 @@ html[data-theme="light"] #new-chat.button-ghost:not(.active):hover {
   cursor: pointer;
 }
 
-.folders-toggle-btn .dropdown-chevron {
+ .folders-new-icon {
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+ }
+
+ .folders-chevron {
   flex: 0 0 auto;
-  margin-left: auto;
   color: var(--muted);
   transition: transform 0.12s ease;
-}
+ }
 
-.folders-toggle-btn.open .dropdown-chevron {
+ .folders-chevron.open {
   transform: rotate(90deg);
-}
+ }
 
 .folders-group.collapsed .folders-list {
   display: none;
@@ -1049,6 +1068,14 @@ html[data-theme="light"] #new-chat.button-ghost:not(.active):hover {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.folder-chat-item .chat-menu-wrap {
+  margin-left: auto;
+}
+
+.folder-root-chats .folder-chat-item {
+  margin-left: 0;
 }
 
 .folder-chat-item:hover {
@@ -1435,6 +1462,12 @@ html[data-theme="light"] #new-chat.button-ghost:not(.active):hover {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
 }
 
+.chat-menu-submenu {
+  right: calc(100% + 6px);
+  top: 0;
+  min-width: 180px;
+}
+
 .chat-menu-item {
   width: 100%;
   display: flex;
@@ -1465,6 +1498,16 @@ html[data-theme="light"] #new-chat.button-ghost:not(.active):hover {
 
 .chat-menu-item-text {
   flex: 1;
+}
+
+.chat-menu-item.has-submenu {
+  justify-content: space-between;
+}
+
+.chat-menu-item-chevron {
+  flex: 0 0 auto;
+  margin-left: 10px;
+  opacity: 0.85;
 }
 
 .chat-menu-item:hover {

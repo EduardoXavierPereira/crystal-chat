@@ -19,8 +19,6 @@ export function attachUIBindings({
   abortStreaming,
   applySidebarSelection,
   focusDockView,
-  togglePinnedOpen,
-  togglePinnedChat,
   onMemoriesSearchInput,
   onMemoriesAdd,
   onMemoriesOpen,
@@ -377,17 +375,6 @@ export function attachUIBindings({
     if (isPdf) return await attachPdfFile(file);
     return await attachBinaryFile(file);
   };
-
-  window.addEventListener(
-    'cc:togglePinnedChat',
-    async (e) => {
-      const id = e?.detail?.id;
-      if (typeof id !== 'string' || !id) return;
-      if (id === tempChatId) return;
-      await togglePinnedChat?.(id);
-    },
-    { signal: bindingsAbort.signal }
-  );
 
   window.addEventListener('beforeunload', () => bindingsAbort.abort(), { signal: bindingsAbort.signal });
 
@@ -843,10 +830,6 @@ export function attachUIBindings({
     { signal: bindingsAbort.signal }
   );
 
-  els.pinnedBtn?.addEventListener('click', () => {
-    togglePinnedOpen?.();
-  });
-
   els.foldersToggleBtn?.addEventListener('click', () => {
     state.foldersOpen = !(typeof state.foldersOpen === 'boolean' ? state.foldersOpen : true);
     saveUIState(state);
@@ -998,10 +981,49 @@ export function attachUIBindings({
     const positionBtn = ({ rect }) => {
       const b = ensureBtn();
       const pad = 8;
-      const x = Math.max(8, Math.round(rect.right + window.scrollX + pad));
-      const y = Math.max(8, Math.round(rect.top + window.scrollY - 6));
+      const margin = 8;
+
+      const wasHidden = b.classList.contains('hidden');
+      if (wasHidden) {
+        b.classList.remove('hidden');
+        b.style.visibility = 'hidden';
+      }
+
+      const viewportLeft = window.scrollX;
+      const viewportTop = window.scrollY;
+      const viewportRight = window.scrollX + window.innerWidth;
+      const viewportBottom = window.scrollY + window.innerHeight;
+
+      const selectionLeft = rect.left + window.scrollX;
+      const selectionRight = rect.right + window.scrollX;
+      const selectionTop = rect.top + window.scrollY;
+
+      const btnRect = b.getBoundingClientRect();
+      const bw = Math.max(1, Math.round(btnRect.width || b.offsetWidth || 1));
+      const bh = Math.max(1, Math.round(btnRect.height || b.offsetHeight || 1));
+
+      const xRight = Math.round(selectionRight + pad);
+      const xLeft = Math.round(selectionLeft - pad - bw);
+
+      let x;
+      if (xRight + bw <= viewportRight - margin) {
+        x = xRight;
+      } else if (xLeft >= viewportLeft + margin) {
+        x = xLeft;
+      } else {
+        x = Math.min(Math.max(xRight, viewportLeft + margin), viewportRight - margin - bw);
+      }
+
+      const yPreferred = Math.round(selectionTop - 6);
+      const y = Math.min(Math.max(yPreferred, viewportTop + margin), viewportBottom - margin - bh);
+
       b.style.left = `${x}px`;
       b.style.top = `${y}px`;
+
+      if (wasHidden) {
+        b.style.visibility = '';
+        b.classList.add('hidden');
+      }
     };
 
     const update = () => {
