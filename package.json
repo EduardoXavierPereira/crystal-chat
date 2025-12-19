@@ -1,7 +1,7 @@
 {
   "name": "crystal-chat",
   "productName": "Crystal Chat",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "A privacy-focused local AI chat client powered by Ollama.",
   "main": "main.js",
   "author": "Eduardo Pereira <help.crystalgames@gmail.com>",

@@ -893,7 +893,7 @@ html[data-theme="light"] #new-chat.button-ghost:not(.active):hover {
   border: 1px solid var(--border);
   border-radius: var(--radius-ml);
   background: rgba(255, 255, 255, 0.015);
-  overflow: hidden;
+  overflow: visible;
   position: relative;
   z-index: 2;
   flex: 0 0 auto;

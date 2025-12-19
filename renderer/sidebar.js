@@ -158,9 +158,11 @@ export function renderChats({
     : state.chats;
 
   const hiddenSet = hiddenChatIds && typeof hiddenChatIds.has === 'function' ? hiddenChatIds : null;
-  const chats = hiddenSet
-    ? base.filter((c) => !hiddenSet.has((c?.id || '').toString().trim()))
-    : base;
+  // When searching, surface all chats (including those in folders); otherwise hide foldered/root-hidden ones.
+  const chats =
+    hiddenSet && !query
+      ? base.filter((c) => !hiddenSet.has((c?.id || '').toString().trim()))
+      : base;
 
   const rootSet = new Set((state.rootChatIds || []).map((x) => (x || '').toString().trim()).filter(Boolean));
   const folderSet = new Set();
