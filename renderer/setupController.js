@@ -1,3 +1,5 @@
+import { formatModelName } from './formatModelName.js';
+
 export function createSetupController({
   els,
   model,
@@ -8,11 +10,14 @@ export function createSetupController({
 }) {
   const EMBEDDING_MODEL = 'embeddinggemma';
 
+  const friendlyModelName = formatModelName(model) || model;
+  const friendlyEmbeddingName = formatModelName(EMBEDDING_MODEL) || EMBEDDING_MODEL;
+
   const SETUP_STEPS = [
     { key: 'install', title: 'Install Ollama', weight: 20 },
     { key: 'start-server', title: 'Start server', weight: 10 },
-    { key: 'pull-model', title: `Download model (${model})`, weight: 50 },
-    { key: 'pull-embedding', title: `Download embeddings model (${EMBEDDING_MODEL})`, weight: 10 },
+    { key: 'pull-model', title: `Download model (${friendlyModelName})`, weight: 50 },
+    { key: 'pull-embedding', title: `Download embeddings model (${friendlyEmbeddingName})`, weight: 10 },
     { key: 'finalize', title: 'Finalize', weight: 10 }
   ];
 
@@ -324,14 +329,15 @@ export function createSetupController({
     modelInstallActive = true;
     modelInstallTarget = target;
     modelInstallPercent = 0;
-    setModelInstallUI({ visible: true, label: `Checking ${target}…`, percent: 0 });
+    const friendlyTarget = formatModelName(target) || target;
+    setModelInstallUI({ visible: true, label: `Checking ${friendlyTarget}…`, percent: 0 });
     modelDropdown?.setDisabled(true);
 
     if (!modelInstallUnsub && api.onOllamaSetupProgress) {
       modelInstallUnsub = api.onOllamaSetupProgress((payload) => {
         if (!payload || !modelInstallActive) return;
         if (payload.kind === 'stage' && payload.stage === 'pull-model') {
-          const msg = payload.message || `Downloading ${modelInstallTarget || ''}…`;
+          const msg = payload.message || `Downloading ${friendlyTarget || ''}…`;
           setModelInstallUI({ visible: true, label: msg, percent: modelInstallPercent });
         }
         if (payload.kind === 'log' && typeof payload.line === 'string') {
@@ -340,7 +346,7 @@ export function createSetupController({
             modelInstallPercent = Math.max(0, Math.min(100, Number(m[1])));
             setModelInstallUI({
               visible: true,
-              label: `Downloading ${modelInstallTarget || ''}…`,
+              label: `Downloading ${friendlyTarget || ''}…`,
               percent: modelInstallPercent
             });
           }
@@ -365,10 +371,10 @@ export function createSetupController({
       const has = await api.ollamaHasModel(target);
       if (!has?.ok) {
         modelInstallPercent = 0;
-        setModelInstallUI({ visible: true, label: `Downloading ${target}…`, percent: 0 });
+        setModelInstallUI({ visible: true, label: `Downloading ${friendlyTarget}…`, percent: 0 });
         const pull = await api.ollamaPullModel(target);
         if (!pull?.ok) throw new Error('Model download failed.');
-        setModelInstallUI({ visible: true, label: `${target} ready.`, percent: 100 });
+        setModelInstallUI({ visible: true, label: `${friendlyTarget} ready.`, percent: 100 });
         await new Promise((r) => setTimeout(r, 400));
       } else {
         setModelInstallUI({ visible: false, label: '', percent: 0 });

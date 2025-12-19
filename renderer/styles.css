@@ -381,11 +381,12 @@ body {
   position: relative;
   display: flex;
   align-items: center;
+  gap: 10px;
  }
 
  .chat-header-tools-btn {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface-2);
@@ -2704,7 +2705,7 @@ html[data-theme="light"] #new-chat.button-ghost:not(.active):hover {
 .prompt-tools-install-bar-fill {
   height: 100%;
   width: 0%;
-  background: rgba(77, 163, 255, 0.7);
+  background: var(--accent);
 }
 
 .prompt-input {

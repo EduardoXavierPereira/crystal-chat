@@ -5,7 +5,15 @@ import { MODEL } from './state.js';
 import { formatModelName } from './formatModelName.js';
 import { createCustomDropdown } from './customDropdown.js';
 
-const HOME_MODEL_OPTIONS = ['qwen3-vl:2b', 'qwen3-vl:4b', 'qwen3-vl:8b'];
+const HOME_MODEL_OPTIONS = [
+  'qwen3-vl:2b-instruct',
+  'qwen3-vl:4b-instruct',
+  'qwen3-vl:8b-instruct',
+  // Optional reasoning-enabled variants (download on selection)
+  'qwen3-vl:2b',
+  'qwen3-vl:4b',
+  'qwen3-vl:8b'
+];
 
  function sanitizeAssistantHtml(html) {
    const raw = (html || '').toString();

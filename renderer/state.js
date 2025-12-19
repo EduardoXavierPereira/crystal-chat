@@ -1,5 +1,5 @@
 export const API_URL = 'http://localhost:11435/api/chat';
-export const MODEL = 'qwen3-vl:4b';
+export const MODEL = 'qwen3-vl:4b-instruct';
 
 export const DEFAULT_SYSTEM_PROMPT = 'You are a helpful chatbot assistant for Crystal Chat. Reply in the user\'s preferred language.';
 

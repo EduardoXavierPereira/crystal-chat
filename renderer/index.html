@@ -159,6 +159,21 @@
             <div class="spinner"></div>
             <span id="typing-indicator-label">Processing response...</span>
           </div>
+          <div id="memory-editor-panel" class="memory-editor-panel hidden" aria-live="polite">
+            <div class="memory-editor-panel-top">
+              <button id="memory-editor-thinking-toggle" type="button" class="memory-editor-toggle button button-ghost" aria-expanded="false">
+                <span class="icon-text">
+                  <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <path d="M12 3a6 6 0 00-6 6c0 4 6 12 6 12s6-8 6-12a6 6 0 00-6-6zm0 8a2 2 0 110-4 2 2 0 010 4z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  <span>Memory editor thinking</span>
+                </span>
+                <span class="dropdown-chevron" aria-hidden="true">▸</span>
+              </button>
+              <button id="memory-editor-skip" type="button" class="button button-ghost">Skip</button>
+            </div>
+            <pre id="memory-editor-thinking" class="memory-editor-thinking hidden"></pre>
+          </div>
         </section>
           <form id="prompt-form" class="prompt-form">
           <div id="error" class="error hidden"></div>
