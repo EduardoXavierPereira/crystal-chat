@@ -933,7 +933,8 @@ async function continueInitAfterSetup() {
     state,
     saveUIState,
     renderChatsUI,
-    applySidebarSelection: (sel) => chatSidebarController?.applySidebarSelection(sel)
+    applySidebarSelection: (sel) => chatSidebarController?.applySidebarSelection(sel),
+    openConfirm
   });
 
   foldersActions?.attachBindings?.();

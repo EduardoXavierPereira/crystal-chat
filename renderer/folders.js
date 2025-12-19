@@ -24,6 +24,7 @@ export function renderFoldersTree({
   state,
   folders,
   onToggleOpen,
+  onDeleteFolder,
   onOpenChat,
   onDragStartChat,
   onDragStartFolder,
@@ -304,11 +305,44 @@ export function renderFoldersTree({
     header.type = 'button';
     header.className = `folder-header ${folder.open ? 'open' : ''}`;
 
-    header.innerHTML =
-      '<span class="folder-header-left">'
-      + '<span class="folder-chevron" aria-hidden="true">▸</span>'
-      + `<span class="folder-name">${escapeHtml(folder.name || 'Folder')}</span>`
-      + '</span>';
+    const headerLeft = document.createElement('span');
+    headerLeft.className = 'folder-header-left';
+
+    const chevron = document.createElement('span');
+    chevron.className = 'folder-chevron';
+    chevron.setAttribute('aria-hidden', 'true');
+    chevron.textContent = '▸';
+    headerLeft.appendChild(chevron);
+
+    const iconEl = document.createElement('span');
+    iconEl.className = 'folder-icon';
+    iconEl.textContent = (folder.icon || '📁').toString();
+    headerLeft.appendChild(iconEl);
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'folder-name';
+    nameEl.innerHTML = escapeHtml(folder.name || 'Folder');
+    headerLeft.appendChild(nameEl);
+
+    header.appendChild(headerLeft);
+
+    const headerRight = document.createElement('span');
+    headerRight.className = 'folder-header-right';
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'folder-delete-btn';
+    deleteBtn.title = 'Delete folder';
+    deleteBtn.setAttribute('aria-label', 'Delete folder');
+    deleteBtn.innerHTML =
+      '<svg class="folder-delete-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+    deleteBtn.onclick = (e) => {
+      e.stopPropagation();
+      onDeleteFolder?.(folder.id);
+    };
+
+    headerRight.appendChild(deleteBtn);
+    header.appendChild(headerRight);
 
     header.onclick = (e) => {
       e.preventDefault();

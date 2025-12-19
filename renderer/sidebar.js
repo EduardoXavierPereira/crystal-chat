@@ -75,6 +75,8 @@ export function getEls() {
     memoryEditSaveBtn: document.getElementById('memory-edit-save'),
     folderCreateModalEl: document.getElementById('folder-create-modal'),
     folderCreateInputEl: document.getElementById('folder-create-input'),
+    folderEmojiPickerEl: document.getElementById('folder-emoji-picker'),
+    folderEmojiSearchEl: document.getElementById('folder-emoji-search'),
     folderCreateCancelBtn: document.getElementById('folder-create-cancel'),
     folderCreateOkBtn: document.getElementById('folder-create-ok'),
     setupModalEl: document.getElementById('setup-modal'),

@@ -152,7 +152,15 @@
         <div id="folder-create-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="folder-create-title">
           <div class="modal">
             <div id="folder-create-title" class="modal-title">Create folder</div>
-            <input id="folder-create-input" class="folder-create-input" type="text" placeholder="Folder name" />
+            <div class="modal-field">
+              <label class="modal-label" for="folder-create-input">Folder name</label>
+              <input id="folder-create-input" class="folder-create-input" type="text" placeholder="Folder name" />
+            </div>
+            <div class="modal-field">
+              <label class="modal-label" for="folder-emoji-search">Pick an emoji</label>
+              <input id="folder-emoji-search" class="emoji-search" type="text" placeholder="Search emojis..." aria-label="Search emojis" />
+              <div id="folder-emoji-picker" class="emoji-picker" role="listbox" aria-label="Emoji picker for folder icon"></div>
+            </div>
             <div class="modal-actions">
               <button id="folder-create-cancel" class="button button-ghost">Cancel</button>
               <button id="folder-create-ok" class="button button-ghost">Create</button>
