@@ -13,7 +13,7 @@ jobs:
         os: [windows-latest, ubuntu-latest]
         include:
           - os: windows-latest
-            build_cmd: npm run dist:win
+            build_cmd: npm run dist:win -- --publish always
             artifact_name: Crystal-Chat-Windows
             artifact_path: |
               dist/*.exe
@@ -21,7 +21,7 @@ jobs:
               dist/*.zip
               dist/win-unpacked/**
           - os: ubuntu-latest
-            build_cmd: npm run dist:linux
+            build_cmd: npm run dist:linux -- --publish always
             artifact_name: Crystal-Chat-Linux
             artifact_path: |
               dist/*.AppImage
