@@ -12,6 +12,8 @@ export function createInitialState() {
     chats: [],
     isStreaming: false,
     pendingNew: false,
+    homeWidgets: ['intro', 'suggestions', 'temp-toggle'],
+    homeEditMode: false,
     renamingId: null,
     editingUserMessageIndex: null,
     editingUserMessageDraft: '',
@@ -54,6 +56,8 @@ export function saveUIState(state) {
       accent: (state.accent || '#7fc9ff').toString(),
       folders: Array.isArray(state.folders) ? state.folders : [],
       rootChatIds: Array.isArray(state.rootChatIds) ? state.rootChatIds : [],
+      homeWidgets: Array.isArray(state.homeWidgets) ? state.homeWidgets : ['intro', 'suggestions', 'temp-toggle'],
+      homeEditMode: !!state.homeEditMode,
       sidebarSelection:
         state.sidebarSelection.kind === 'chat' && state.sidebarSelection.id === TEMP_CHAT_ID
           ? { kind: 'chat', id: null }
@@ -88,6 +92,12 @@ export function loadUIState() {
       }
       if (!Array.isArray(parsed.rootChatIds)) {
         parsed.rootChatIds = [];
+      }
+      if (!Array.isArray(parsed.homeWidgets)) {
+        parsed.homeWidgets = ['intro', 'suggestions', 'temp-toggle'];
+      }
+      if (typeof parsed.homeEditMode === 'undefined') {
+        parsed.homeEditMode = false;
       }
       if (typeof parsed.foldersOpen === 'undefined') {
         parsed.foldersOpen = true;

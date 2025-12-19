@@ -798,6 +798,10 @@ async function continueInitAfterSetup() {
   state.accent = (ui?.accent || state.accent || '#7fc9ff').toString();
   state.folders = Array.isArray(ui?.folders) ? ui.folders : [];
   state.rootChatIds = Array.isArray(ui?.rootChatIds) ? ui.rootChatIds : [];
+  state.homeWidgets = Array.isArray(ui?.homeWidgets) && ui.homeWidgets.length > 0
+    ? ui.homeWidgets
+    : ['intro', 'suggestions', 'temp-toggle'];
+  state.homeEditMode = !!ui?.homeEditMode;
   clearPendingImage();
   applyThemeAndAccent(state);
 
@@ -1127,6 +1131,8 @@ function renderActiveChatUI() {
     tempChat: state.tempChat,
     typingIndicator: els.typingIndicator,
     autosizePrompt,
+    saveUIState,
+    renderActiveChatUI,
     onCopyMessage: handleCopyMessage,
     onRegenerateMessage: handleRegenerateMessage,
     onDeleteUserMessage: (msg, idx) => chatController?.handleDeleteUserMessage?.(msg, idx),
