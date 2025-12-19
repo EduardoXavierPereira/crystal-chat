@@ -29,6 +29,8 @@ jobs:
               dist/*.rpm
               dist/linux-unpacked/**
     runs-on: ${{ matrix.os }}
+    env:
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
