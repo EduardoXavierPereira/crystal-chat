@@ -1,4 +1,4 @@
-name: Windows Build
+name: Desktop Builds
 
 "on":
   workflow_dispatch:
@@ -7,8 +7,28 @@ name: Windows Build
       - 'v*'
 
 jobs:
-  build-windows:
-    runs-on: windows-latest
+  build:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        include:
+          - os: windows-latest
+            build_cmd: npm run dist:win
+            artifact_name: Crystal-Chat-Windows
+            artifact_path: |
+              dist/*.exe
+              dist/*.msi
+              dist/*.zip
+              dist/win-unpacked/**
+          - os: ubuntu-latest
+            build_cmd: npm run dist:linux
+            artifact_name: Crystal-Chat-Linux
+            artifact_path: |
+              dist/*.AppImage
+              dist/*.deb
+              dist/*.rpm
+              dist/linux-unpacked/**
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,16 +42,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Windows installer
-        run: npm run dist:win
+      - name: Build
+        run: ${{ matrix.build_cmd }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Crystal-Chat-Windows
-          path: |
-            dist/*.exe
-            dist/*.msi
-            dist/*.zip
-            dist/win-unpacked/**
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_path }}
           if-no-files-found: error
