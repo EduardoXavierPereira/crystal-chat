@@ -47,10 +47,10 @@ let runtimeApiUrl = null;
 
 let db;
 
-function clearPendingImage() {
-  state.pendingImage = null;
+function clearPendingAttachments() {
+  state.pendingImages = [];
   state.pendingTextFile = null;
-  state.pendingFile = null;
+  state.pendingFiles = [];
   els.promptInsertBtn?.classList.remove('has-attachment');
   if (els.promptAttachmentsEl) {
     els.promptAttachmentsEl.innerHTML = '';
@@ -58,16 +58,16 @@ function clearPendingImage() {
   }
 }
 
-function getPendingImage() {
-  return state?.pendingImage || null;
+function getPendingImages() {
+  return Array.isArray(state?.pendingImages) ? state.pendingImages : [];
 }
 
 function getPendingTextFile() {
   return state?.pendingTextFile || null;
 }
 
-function getPendingFile() {
-  return state?.pendingFile || null;
+function getPendingFiles() {
+  return Array.isArray(state?.pendingFiles) ? state.pendingFiles : [];
 }
 
 let initCompleted = false;
@@ -531,7 +531,11 @@ function updateSendButtonEnabled() {
     return;
   }
   const hasText = !!(els.promptInput.value || '').toString().trim();
-  els.sendBtn.disabled = !hasText;
+  const hasAttachments =
+    (Array.isArray(state.pendingImages) && state.pendingImages.length > 0)
+    || (Array.isArray(state.pendingFiles) && state.pendingFiles.length > 0)
+    || !!state.pendingTextFile;
+  els.sendBtn.disabled = !(hasText || hasAttachments);
 }
 
 function setRandomnessSliderFill() {
@@ -802,7 +806,7 @@ async function continueInitAfterSetup() {
     ? ui.homeWidgets
     : ['intro', 'suggestions', 'temp-toggle'];
   state.homeEditMode = !!ui?.homeEditMode;
-  clearPendingImage();
+  clearPendingAttachments();
   applyThemeAndAccent(state);
 
   if (els.modelDropdownEl) {
@@ -1041,10 +1045,10 @@ async function continueInitAfterSetup() {
     renderActiveChatUI,
     renderChatsUI,
     streamAssistant,
-    getPendingImage,
+    getPendingImages,
     getPendingTextFile,
-    getPendingFile,
-    clearPendingImage
+    getPendingFiles,
+    clearPendingAttachments
   });
 
   attachUIBindings({

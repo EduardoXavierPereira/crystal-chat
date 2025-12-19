@@ -13,10 +13,10 @@ export function createChatController({
   renderActiveChatUI,
   renderChatsUI,
   streamAssistant,
-  getPendingImage,
+  getPendingImages,
   getPendingTextFile,
-  getPendingFile,
-  clearPendingImage
+  getPendingFiles,
+  clearPendingAttachments
 }) {
   function ensureChatStructure(chat) {
     if (!chat || typeof chat !== 'object') return;
@@ -125,13 +125,15 @@ export function createChatController({
     if (state.isStreaming) return;
     if (state.sidebarSelection.kind !== 'chat') return;
 
-    const pendingImage = getPendingImage?.() || null;
+    const pendingImages = getPendingImages?.() || [];
     const pendingTextFile = getPendingTextFile?.() || null;
-    const pendingFile = getPendingFile?.() || null;
+    const pendingFiles = getPendingFiles?.() || [];
 
     const rawContent = (els.promptInput.value || '').toString();
     const content = rawContent.trim();
-    if (!content && !pendingImage && !pendingTextFile && !pendingFile) return;
+    const hasImages = Array.isArray(pendingImages) && pendingImages.length > 0;
+    const hasFiles = Array.isArray(pendingFiles) && pendingFiles.length > 0;
+    if (!content && !hasImages && !pendingTextFile && !hasFiles) return;
 
     const attachmentText = pendingTextFile && pendingTextFile.text
       ? (() => {
@@ -182,16 +184,16 @@ export function createChatController({
       role: 'user',
       content,
       attachmentText,
-      images: pendingImage?.previewUrl ? [pendingImage.previewUrl] : (pendingImage?.base64 ? [`data:image/*;base64,${pendingImage.base64}`] : undefined),
-      files: pendingFile
-        ? [
-            {
-              name: (pendingFile.name || 'file').toString(),
-              type: (pendingFile.type || '').toString(),
-              size: typeof pendingFile.size === 'number' ? pendingFile.size : 0,
-              dataUrl: (pendingFile.dataUrl || '').toString()
-            }
-          ]
+      images: hasImages
+        ? pendingImages.map((img) => (img.previewUrl ? img.previewUrl : `data:image/*;base64,${img.base64 || ''}`)).filter(Boolean)
+        : undefined,
+      files: hasFiles
+        ? pendingFiles.map((f) => ({
+            name: (f.name || 'file').toString(),
+            type: (f.type || '').toString(),
+            size: typeof f.size === 'number' ? f.size : 0,
+            dataUrl: (f.dataUrl || '').toString()
+          }))
         : undefined,
       textFile: pendingTextFile && !isPdfTextFile
         ? {
@@ -203,8 +205,8 @@ export function createChatController({
     };
     chat.messages.push(userMsg);
 
-    if (pendingImage || pendingTextFile || pendingFile) {
-      clearPendingImage?.();
+    if (hasImages || pendingTextFile || hasFiles) {
+      clearPendingAttachments?.();
     }
     if (chat.id !== tempChatId) {
       await saveChat(db, chat);

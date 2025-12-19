@@ -105,12 +105,16 @@ export function attachUIBindings({
         fr.onload = () => resolve(String(fr.result || ''));
         fr.readAsDataURL(file);
       });
-      state.pendingFile = {
-        dataUrl,
-        name: file.name,
-        type: file.type,
-        size: typeof file.size === 'number' ? file.size : 0
-      };
+      if (!Array.isArray(state.pendingFiles)) state.pendingFiles = [];
+      state.pendingFiles = [
+        ...state.pendingFiles,
+        {
+          dataUrl,
+          name: file.name,
+          type: file.type,
+          size: typeof file.size === 'number' ? file.size : 0
+        }
+      ];
       renderPromptAttachments();
       return true;
     } catch {
@@ -173,16 +177,15 @@ export function attachUIBindings({
     if (!root) return;
 
     const textFile = state.pendingTextFile || null;
-    const img = state.pendingImage || null;
-    const file = state.pendingFile || null;
-    const hasAny = !!(textFile || img || file);
+    const images = Array.isArray(state.pendingImages) ? state.pendingImages : [];
+    const files = Array.isArray(state.pendingFiles) ? state.pendingFiles : [];
+    const hasAny = !!(textFile || images.length > 0 || files.length > 0);
 
     const isPdfText = !!textFile && (textFile.type || '').toString().toLowerCase() === 'application/pdf';
-    const isPdfFile = !!file && (file.type || '').toString().toLowerCase() === 'application/pdf';
 
     root.innerHTML = '';
     root.classList.toggle('hidden', !hasAny);
-    els.promptInsertBtn?.classList.toggle('has-attachment', !!img);
+    els.promptInsertBtn?.classList.toggle('has-attachment', images.length > 0);
 
     if (textFile) {
       const wrap = document.createElement('div');
@@ -212,7 +215,11 @@ export function attachUIBindings({
         'click',
         () => {
           state.pendingTextFile = null;
-          if (isPdfText) state.pendingFile = null;
+          if (isPdfText && Array.isArray(state.pendingFiles)) {
+            state.pendingFiles = state.pendingFiles.filter(
+              (f) => (f?.type || '').toString().toLowerCase() !== 'application/pdf'
+            );
+          }
           renderPromptAttachments();
         },
         { signal: bindingsAbort.signal }
@@ -224,7 +231,8 @@ export function attachUIBindings({
       root.appendChild(wrap);
     }
 
-    if (img) {
+    images.forEach((img, idx) => {
+      if (!img) return;
       const wrap = document.createElement('div');
       wrap.className = 'prompt-attachment';
 
@@ -245,7 +253,7 @@ export function attachUIBindings({
       remove.addEventListener(
         'click',
         () => {
-          state.pendingImage = null;
+          state.pendingImages = images.filter((_, i) => i !== idx);
           renderPromptAttachments();
         },
         { signal: bindingsAbort.signal }
@@ -255,46 +263,47 @@ export function attachUIBindings({
       wrap.appendChild(title);
       wrap.appendChild(remove);
       root.appendChild(wrap);
-    }
+    });
 
-    if (file && !isPdfText) {
-      const wrap = document.createElement('div');
-      wrap.className = 'prompt-attachment';
+    files
+      .filter((f) => f && (!isPdfText || (f.type || '').toString().toLowerCase() !== 'application/pdf'))
+      .forEach((file, idx) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'prompt-attachment';
 
-      const title = document.createElement('div');
-      title.className = 'prompt-attachment-title';
-      title.textContent = `File: ${file.name || 'file'}`;
+        const title = document.createElement('div');
+        title.className = 'prompt-attachment-title';
+        title.textContent = `File: ${file.name || 'file'}`;
 
-      const meta = document.createElement('div');
-      meta.className = 'prompt-attachment-meta';
-      if (typeof file.size === 'number' && file.size > 0) {
-        meta.textContent = file.size < 1024
-          ? `${file.size} B`
-          : `${Math.max(1, Math.ceil(file.size / 1024))} KB`;
-      } else {
-        meta.textContent = '';
-      }
+        const meta = document.createElement('div');
+        meta.className = 'prompt-attachment-meta';
+        if (typeof file.size === 'number' && file.size > 0) {
+          meta.textContent = file.size < 1024
+            ? `${file.size} B`
+            : `${Math.max(1, Math.ceil(file.size / 1024))} KB`;
+        } else {
+          meta.textContent = '';
+        }
 
-      const remove = document.createElement('button');
-      remove.type = 'button';
-      remove.className = 'prompt-attachment-remove';
-      remove.setAttribute('aria-label', 'Remove file');
-      remove.textContent = '×';
-      remove.addEventListener(
-        'click',
-        () => {
-          state.pendingFile = null;
-          if (isPdfFile) state.pendingTextFile = null;
-          renderPromptAttachments();
-        },
-        { signal: bindingsAbort.signal }
-      );
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'prompt-attachment-remove';
+        remove.setAttribute('aria-label', 'Remove file');
+        remove.textContent = '×';
+        remove.addEventListener(
+          'click',
+          () => {
+            state.pendingFiles = files.filter((_, i) => i !== idx);
+            renderPromptAttachments();
+          },
+          { signal: bindingsAbort.signal }
+        );
 
-      wrap.appendChild(title);
-      if (meta.textContent) wrap.appendChild(meta);
-      wrap.appendChild(remove);
-      root.appendChild(wrap);
-    }
+        wrap.appendChild(title);
+        if (meta.textContent) wrap.appendChild(meta);
+        wrap.appendChild(remove);
+        root.appendChild(wrap);
+      });
   }
 
   renderPromptAttachments();
@@ -330,7 +339,8 @@ export function attachUIBindings({
 
       const idx = dataUrl.indexOf(',');
       const base64 = idx >= 0 ? dataUrl.slice(idx + 1) : dataUrl;
-      state.pendingImage = { base64, name: file.name, type: file.type, previewUrl: dataUrl };
+      if (!Array.isArray(state.pendingImages)) state.pendingImages = [];
+      state.pendingImages = [...state.pendingImages, { base64, name: file.name, type: file.type, previewUrl: dataUrl }];
       renderPromptAttachments();
       return true;
     } catch {
@@ -462,12 +472,16 @@ export function attachUIBindings({
           try {
             const res = await window.electronAPI.readLocalFile(firstLine);
             if (res && res.ok && res.kind === 'image' && res.base64) {
-              state.pendingImage = {
-                base64: res.base64,
-                name: res.name,
-                type: res.type,
-                previewUrl: `data:${(res.type || 'image/*').toString()};base64,${res.base64}`
-              };
+              if (!Array.isArray(state.pendingImages)) state.pendingImages = [];
+              state.pendingImages = [
+                ...state.pendingImages,
+                {
+                  base64: res.base64,
+                  name: res.name,
+                  type: res.type,
+                  previewUrl: `data:${(res.type || 'image/*').toString()};base64,${res.base64}`
+                }
+              ];
               renderPromptAttachments();
               handled = true;
             } else if (res && res.ok && res.kind === 'text' && typeof res.text === 'string') {
@@ -513,8 +527,7 @@ export function attachUIBindings({
     e.stopPropagation();
 
     for (const f of files) {
-      const ok = await classifyAndAttachFile(f);
-      if (ok) break;
+      await classifyAndAttachFile(f);
     }
   };
 
@@ -662,17 +675,7 @@ export function attachUIBindings({
       const file = els.promptInsertImageInput?.files?.[0];
       try {
         if (!file) return;
-        const dataUrl = await new Promise((resolve, reject) => {
-          const fr = new FileReader();
-          fr.onerror = () => reject(new Error('file_read_failed'));
-          fr.onload = () => resolve(String(fr.result || ''));
-          fr.readAsDataURL(file);
-        });
-
-        const idx = dataUrl.indexOf(',');
-        const base64 = idx >= 0 ? dataUrl.slice(idx + 1) : dataUrl;
-        state.pendingImage = { base64, name: file.name, type: file.type, previewUrl: dataUrl };
-        renderPromptAttachments();
+        await classifyAndAttachFile(file);
       } catch {
         // ignore
       } finally {
