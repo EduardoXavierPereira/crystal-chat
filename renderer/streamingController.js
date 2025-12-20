@@ -532,86 +532,13 @@ export function createStreamingController({
       }
     };
 
-    const toolInstructionBlock = () => {
-      const enabled = {
-        web_search: !!state.enableInternet,
-        open_link: !!state.enableInternet
-      };
-      if (!enabled.web_search && !enabled.open_link) return '';
+    // Import tools registry
+    const { getToolsSystemPrompt, parseToolCall, executeTool, formatToolResult } = await import('./tools/registry.js');
 
-      let s = '';
-      s += 'You MAY call tools if (and only if) the user enabled them in the UI.\n';
-      s += 'When calling a tool, respond with ONLY a single line of JSON (no markdown, no extra text).\n';
-      s += 'Tool call format:\n';
-      s += '{"tool":"web_search","args":{"query":"..."}}\n';
-      s += '{"tool":"open_link","args":{"url":"https://..."}}\n';
-      s += 'After a tool result is provided, you will be called again and should either call another tool (same JSON format) or respond normally.\n';
-      s += 'When you respond normally after tools, DO NOT dump raw tool JSON or a bare link list.\n';
-      s += 'Instead: write a short synthesized answer.\n';
-      s += 'Rules:\n';
-      s += '- Only call tools that are enabled when they\'re useful.\n';
-      s += '- Keep queries concise.\n';
-      s += 'Enabled tools:\n';
-      if (enabled.web_search) s += '- web_search(query)\n';
-      if (enabled.open_link) s += '- open_link(url)\n';
-      return s.trim();
-    };
+    const tryParseToolCall = (text) => parseToolCall(text);
 
-    const tryParseToolCall = (text) => {
-      const rawAll = (text || '').toString();
-      const raw = rawAll.trim();
-      if (!raw) return null;
-      if (raw.length > 8000) return null;
-
-      // Be tolerant: some models may output JSON plus extra text.
-      // Extract the first JSON object by finding the first balanced {...} block.
-      const start = raw.indexOf('{');
-      if (start < 0) return null;
-      let depth = 0;
-      let end = -1;
-      for (let i = start; i < raw.length; i += 1) {
-        const ch = raw[i];
-        if (ch === '{') depth += 1;
-        if (ch === '}') {
-          depth -= 1;
-          if (depth === 0) {
-            end = i;
-            break;
-          }
-        }
-      }
-      if (end < 0) return null;
-
-      const jsonCandidate = raw.slice(start, end + 1).trim();
-      if (!jsonCandidate.startsWith('{') || !jsonCandidate.endsWith('}')) return null;
-
-      let j;
-      try {
-        j = JSON.parse(jsonCandidate);
-      } catch {
-        return null;
-      }
-      const tool = j?.tool;
-      const args = j?.args;
-      if (tool !== 'web_search' && tool !== 'open_link') return null;
-      if (typeof args !== 'object' || !args) return null;
-      return { tool, args };
-    };
-
-    const runTool = async ({ tool, args }) => {
-      const api = window.electronAPI;
-      if (!api) throw new Error('Tools unavailable.');
-      if (tool === 'web_search') {
-        if (!state.enableInternet) throw new Error('Internet access is disabled.');
-        const query = (args.query || '').toString();
-        return await api.webSearch(query);
-      }
-      if (tool === 'open_link') {
-        if (!state.enableInternet) throw new Error('Internet access is disabled.');
-        const url = (args.url || '').toString();
-        return await api.openLink(url);
-      }
-      throw new Error('Unknown tool.');
+    const runTool = async ({ title, arguments: args }) => {
+      return await executeTool(title, args);
     };
 
     try {
@@ -620,7 +547,7 @@ export function createStreamingController({
         + 'You have access to a vector database of long-term memories you\'ve gathered over previous chats with the user. If it\'s empty, that means you have no memories.';
       let combinedSystem = sys ? `${hardSys}\n\n${sys}` : hardSys;
 
-      const toolBlock = toolInstructionBlock();
+      const toolBlock = getToolsSystemPrompt(state);
       if (toolBlock) {
         combinedSystem = `${combinedSystem}\n\n${toolBlock}`;
       }
@@ -786,7 +713,7 @@ export function createStreamingController({
 
           const toolResult = await runTool(toolCall);
           try {
-            const trace = `\n\n[tool:${toolCall.tool}] args=${JSON.stringify(toolCall.args)}\n[tool:${toolCall.tool}] result=${JSON.stringify(toolResult)}`;
+            const trace = `\n\n[tool:${toolCall.title}] args=${JSON.stringify(toolCall.arguments)}\n[tool:${toolCall.title}] result=${JSON.stringify(toolResult)}`;
             assistantMsg.thinking = `${(assistantMsg.thinking || '').toString()}${trace}`;
             assistantMsg._thinkingActive = false;
             assistantMsg._thinkingOpen = true;
@@ -797,7 +724,7 @@ export function createStreamingController({
           }
           // Record the tool call + result as synthetic messages.
           loopMessages.push({ role: 'assistant', content: JSON.stringify(toolCall) });
-          loopMessages.push({ role: 'system', content: `Tool result (${toolCall.tool}): ${JSON.stringify(toolResult)}` });
+          loopMessages.push({ role: 'system', content: `Tool result (${toolCall.title}): ${JSON.stringify(toolResult)}` });
         }
       } catch (e) {
         if (isTransientOllamaLoadError(e?.message) && !streamAbortController?.signal?.aborted) {
@@ -822,7 +749,7 @@ export function createStreamingController({
             toolTurns += 1;
             const toolResult = await runTool(toolCall);
             try {
-              const trace = `\n\n[tool:${toolCall.tool}] args=${JSON.stringify(toolCall.args)}\n[tool:${toolCall.tool}] result=${JSON.stringify(toolResult)}`;
+              const trace = `\n\n[tool:${toolCall.title}] args=${JSON.stringify(toolCall.arguments)}\n[tool:${toolCall.title}] result=${JSON.stringify(toolResult)}`;
               assistantMsg.thinking = `${(assistantMsg.thinking || '').toString()}${trace}`;
               assistantMsg._thinkingActive = false;
               assistantMsg._thinkingOpen = true;
@@ -832,7 +759,7 @@ export function createStreamingController({
               // ignore
             }
             loopMessages.push({ role: 'assistant', content: JSON.stringify(toolCall) });
-            loopMessages.push({ role: 'system', content: `Tool result (${toolCall.tool}): ${JSON.stringify(toolResult)}` });
+            loopMessages.push({ role: 'system', content: `Tool result (${toolCall.title}): ${JSON.stringify(toolResult)}` });
           }
         } else {
           throw e;

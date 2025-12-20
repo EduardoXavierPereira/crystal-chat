@@ -33,6 +33,7 @@ import { DEFAULT_EMBEDDING_MODEL } from './memories.js';
 import { createMemoriesActions } from './memoriesActions.js';
 import { createToggle } from './toggle.js';
 import { initDockLayout, setDockStatus } from './dockLayout.js';
+import { generateToolToggles } from './tools/uiGenerator.js';
 
 const els = getEls();
 const state = createInitialState();
@@ -847,21 +848,11 @@ async function continueInitAfterSetup() {
   if (els.textSizeValue) els.textSizeValue.textContent = state.textSize.toFixed(2);
   if (els.systemPromptInput) els.systemPromptInput.value = state.systemPrompt;
 
-  if (els.enableInternetToggleEl) {
-    els.enableInternetToggleEl.innerHTML = '';
-    const t = createToggle({
-      id: 'enable-internet-toggle-input',
-      text: '',
-      checked: !!state.enableInternet,
-      switchOnRight: true,
-      showText: false,
-      onChange: (v) => {
-        state.enableInternet = !!v;
-        saveUIState(state);
-        updatePromptPlaceholder();
-      }
+  // Generate dynamic tool toggles
+  if (els.toolsTogglesContainerEl) {
+    generateToolToggles(els.toolsTogglesContainerEl, state, saveUIState, () => {
+      updatePromptPlaceholder();
     });
-    els.enableInternetToggleEl.appendChild(t.el);
   }
 
   if (els.updateMemoryToggleEl) {

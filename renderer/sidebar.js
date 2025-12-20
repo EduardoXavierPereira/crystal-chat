@@ -26,7 +26,7 @@ export function getEls() {
     creativitySlider: document.getElementById('creativity-slider'),
     creativityValue: document.getElementById('creativity-value'),
     systemPromptInput: document.getElementById('system-prompt'),
-    enableInternetToggleEl: document.getElementById('enable-internet-toggle'),
+    toolsTogglesContainerEl: document.getElementById('tools-toggles-container'),
     updateMemoryToggleEl: document.getElementById('update-memory-toggle'),
     themeSegmentEl: document.getElementById('theme-segment'),
     themeSystemBtn: document.getElementById('theme-system-btn'),
