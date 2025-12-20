@@ -16,7 +16,7 @@ export class OpenLinkTool extends BaseTool {
 - Only fetch URLs that are relevant to the user's question`;
 
   isEnabled(state) {
-    return !!state.enableInternet;
+    return state.toolEnabled_open_link === true;
   }
 
   validateArgs(args) {

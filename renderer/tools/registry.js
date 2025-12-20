@@ -5,6 +5,12 @@
 
 import { webSearchTool } from './webSearch.js';
 import { openLinkTool } from './openLink.js';
+import { fileReadTool } from './fileRead.js';
+import { fileWriteTool } from './fileWrite.js';
+import { fileEditTool } from './fileEdit.js';
+import { fileGlobTool } from './fileGlob.js';
+import { fileGrepTool } from './fileGrep.js';
+import { folderBrowseTool } from './folderBrowse.js';
 
 /**
  * List of all available tools
@@ -12,7 +18,13 @@ import { openLinkTool } from './openLink.js';
  */
 const AVAILABLE_TOOLS = [
   webSearchTool,
-  openLinkTool
+  openLinkTool,
+  fileReadTool,
+  fileWriteTool,
+  fileEditTool,
+  fileGlobTool,
+  fileGrepTool,
+  folderBrowseTool
 ];
 
 /**
@@ -74,9 +86,16 @@ export function getToolsSystemPrompt(state, options = {}) {
 
   let prompt = '';
   prompt += 'You MAY call tools if (and only if) the user enabled them in the UI.\n';
-  prompt += 'When calling a tool, respond with ONLY a single line of JSON (no markdown, no extra text).\n';
-  prompt += 'Tool call format:\n';
+  prompt += 'CRITICAL: When calling a tool, output ONLY the JSON object on a single line. No markdown, no code blocks, no extra text, no explanation.\n';
+  prompt += 'The JSON must be valid and parseable. Start with { and end with }.\n';
+  prompt += '\n';
+  prompt += 'Tool call format (output EXACTLY like this):\n';
   prompt += '{"title":"<tool_id>","arguments":{...}}\n';
+  prompt += '\n';
+  prompt += 'Examples:\n';
+  prompt += '{"title":"file_read","arguments":{"path":"/home/user/file.js"}}\n';
+  prompt += '{"title":"file_glob","arguments":{"pattern":"**/*.js"}}\n';
+  prompt += '{"title":"web_search","arguments":{"query":"python tutorial"}}\n';
   prompt += '\n';
 
   // Add tool-specific instructions
@@ -87,12 +106,19 @@ export function getToolsSystemPrompt(state, options = {}) {
   }
 
   prompt += '\n';
-  prompt += 'After a tool result is provided, you will be called again and should either call another tool (same JSON format) or respond normally.\n';
-  prompt += 'When you respond normally after tools, DO NOT dump raw tool JSON or a bare link list.\n';
-  prompt += 'Instead: write a short synthesized answer.\n';
+  prompt += 'AFTER tool execution:\n';
+  prompt += 'You will receive the tool result. Then you can either:\n';
+  prompt += '1. Call another tool (same JSON format on a single line)\n';
+  prompt += '2. Respond normally to the user (synthesize the tool results)\n';
+  prompt += '\n';
+  prompt += 'When responding normally, DO NOT include the raw tool JSON.\n';
+  prompt += 'Instead, synthesize a natural answer using the tool results.\n';
+  prompt += '\n';
   prompt += 'Rules:\n';
-  prompt += '- Only call tools that are enabled when they\'re useful.\n';
-  prompt += '- Keep queries concise.\n';
+  prompt += '- ONLY output JSON when calling a tool (no other text on that line)\n';
+  prompt += '- Each tool call is a complete JSON object: {title, arguments}\n';
+  prompt += '- Only call enabled tools\n';
+  prompt += '- Keep tool arguments concise\n';
   prompt += 'Enabled tools:\n';
 
   for (const tool of enabledTools) {

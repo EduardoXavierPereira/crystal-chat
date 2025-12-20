@@ -1011,3 +1011,306 @@ ipcMain.handle('tools:readLocalFile', async (_evt, { path: p }) => {
 
   return { ok: false, error: 'unsupported_file_type' };
 });
+
+// ============================================================================
+// File System Tools
+// ============================================================================
+
+const pathModule = require('path');
+
+/**
+ * Simple glob pattern matcher (basic support for *, **, and ?)
+ */
+function matchesGlobPattern(filePath, pattern) {
+  // Convert glob pattern to regex
+  let regexPattern = pattern
+    .replace(/\./g, '\\.')
+    .replace(/\*\*/g, '.*')
+    .replace(/\*/g, '[^/]*')
+    .replace(/\?/g, '.');
+
+  const regex = new RegExp(`^${regexPattern}$`);
+  return regex.test(filePath);
+}
+
+/**
+ * Recursively find files matching a pattern
+ */
+function findFiles(startPath, pattern, maxResults = 100) {
+  const results = [];
+
+  function traverse(dir) {
+    if (results.length >= maxResults) return;
+
+    try {
+      const entries = fs.readdirSync(dir);
+
+      for (const entry of entries) {
+        if (results.length >= maxResults) break;
+
+        // Skip hidden files and common exclusions
+        if (entry.startsWith('.')) continue;
+        if (entry === 'node_modules') continue;
+
+        const fullPath = pathModule.join(dir, entry);
+        const relPath = pathModule.relative(startPath, fullPath);
+
+        try {
+          const stat = fs.statSync(fullPath);
+
+          if (stat.isFile()) {
+            if (matchesGlobPattern(relPath, pattern)) {
+              results.push(fullPath);
+            }
+          } else if (stat.isDirectory()) {
+            traverse(fullPath);
+          }
+        } catch {
+          // Skip files we can't stat
+        }
+      }
+    } catch {
+      // Skip directories we can't read
+    }
+  }
+
+  traverse(startPath);
+  return results;
+}
+
+/**
+ * File Read Tool Handler
+ */
+ipcMain.handle('tools:fileRead', async (_evt, { path: filePath, offset, limit }) => {
+  const p = (filePath || '').toString().trim();
+  if (!p) return { ok: false, error: 'missing_path' };
+
+  try {
+    const content = fs.readFileSync(p, 'utf8');
+    const lines = content.split('\n');
+
+    // Handle offset and limit
+    const startLine = (offset || 1) - 1; // Convert to 0-indexed
+    const maxLines = limit || lines.length - startLine;
+    const endLine = Math.min(startLine + maxLines, lines.length);
+
+    const selectedLines = lines.slice(startLine, endLine);
+    const result = selectedLines.join('\n');
+
+    return {
+      ok: true,
+      path: p,
+      content: result,
+      lines: selectedLines.length,
+      offset,
+      limit
+    };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+});
+
+/**
+ * File Write Tool Handler
+ */
+ipcMain.handle('tools:fileWrite', async (_evt, { path: filePath, content }) => {
+  const p = (filePath || '').toString().trim();
+  if (!p) return { ok: false, error: 'missing_path' };
+  if (typeof content !== 'string') return { ok: false, error: 'missing_content' };
+
+  try {
+    fs.writeFileSync(p, content, 'utf8');
+    return {
+      ok: true,
+      path: p,
+      bytes: content.length
+    };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+});
+
+/**
+ * File Edit Tool Handler
+ */
+ipcMain.handle('tools:fileEdit', async (_evt, { path: filePath, old_string, new_string, replace_all }) => {
+  const p = (filePath || '').toString().trim();
+  if (!p) return { ok: false, error: 'missing_path' };
+  if (typeof old_string !== 'string') return { ok: false, error: 'missing_old_string' };
+  if (typeof new_string !== 'string') return { ok: false, error: 'missing_new_string' };
+
+  try {
+    let content = fs.readFileSync(p, 'utf8');
+    let replacements = 0;
+
+    if (replace_all) {
+      const regex = new RegExp(escapeRegExp(old_string), 'g');
+      const newContent = content.replace(regex, new_string);
+      replacements = (content.match(regex) || []).length;
+      content = newContent;
+    } else {
+      if (content.includes(old_string)) {
+        content = content.replace(old_string, new_string);
+        replacements = 1;
+      }
+    }
+
+    fs.writeFileSync(p, content, 'utf8');
+
+    return {
+      ok: true,
+      path: p,
+      replacements
+    };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+});
+
+/**
+ * File Glob Tool Handler
+ */
+ipcMain.handle('tools:fileGlob', async (_evt, { pattern, path: basePath }) => {
+  const pat = (pattern || '').toString().trim();
+  if (!pat) return { ok: false, error: 'missing_pattern' };
+
+  const searchPath = basePath ? (basePath || '').toString().trim() : process.cwd();
+
+  try {
+    if (!fs.existsSync(searchPath)) {
+      return { ok: false, error: 'path_not_found' };
+    }
+
+    const files = findFiles(searchPath, pat, 100);
+    return {
+      ok: true,
+      pattern: pat,
+      path: searchPath,
+      files
+    };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+});
+
+/**
+ * File Grep Tool Handler
+ */
+ipcMain.handle('tools:fileGrep', async (_evt, { pattern, path: searchPath, glob: globPattern, type, output_mode, head_limit }) => {
+  const pat = (pattern || '').toString().trim();
+  if (!pat) return { ok: false, error: 'missing_pattern' };
+
+  const sp = (searchPath || '.').toString().trim();
+
+  try {
+    const regex = new RegExp(pat);
+    const results = [];
+    let matches = 0;
+
+    // Get files to search using our simple glob
+    const globPattern_ = globPattern || '**/*';
+    const files = findFiles(sp, globPattern_, 100);
+
+    // Search files
+    for (const fullPath of files) {
+      if (head_limit && results.length >= head_limit) break;
+
+      try {
+        const content = fs.readFileSync(fullPath, 'utf8');
+        const lines = content.split('\n');
+
+        for (let i = 0; i < lines.length; i++) {
+          if (regex.test(lines[i])) {
+            matches += 1;
+            if (output_mode === 'files_with_matches') {
+              if (!results.find(r => r === fullPath)) {
+                results.push(fullPath);
+              }
+            } else if (output_mode === 'count') {
+              // Already counting
+            } else {
+              results.push({
+                file: fullPath,
+                line: i + 1,
+                content: lines[i]
+              });
+            }
+
+            if (head_limit && results.length >= head_limit) break;
+          }
+        }
+      } catch {
+        // Skip files that can't be read
+      }
+    }
+
+    return {
+      ok: true,
+      pattern: pat,
+      matches,
+      results: results.slice(0, head_limit || 50)
+    };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+});
+
+/**
+ * Folder Browse Tool Handler
+ */
+ipcMain.handle('tools:folderBrowse', async (_evt, { path: folderPath, recursive }) => {
+  const p = (folderPath || '').toString().trim();
+  if (!p) return { ok: false, error: 'missing_path' };
+
+  try {
+    if (!fs.existsSync(p)) {
+      return { ok: false, error: 'path_not_found' };
+    }
+
+    const stat = fs.statSync(p);
+    if (!stat.isDirectory()) {
+      return { ok: false, error: 'not_a_directory' };
+    }
+
+    const items = [];
+
+    const readDir = (dirPath, depth = 0) => {
+      const entries = fs.readdirSync(dirPath);
+
+      for (const entry of entries) {
+        if (entry.startsWith('.')) continue; // Skip hidden files
+
+        const fullPath = pathModule.join(dirPath, entry);
+        const stat = fs.statSync(fullPath);
+
+        items.push({
+          name: entry,
+          type: stat.isDirectory() ? 'dir' : 'file',
+          path: fullPath
+        });
+
+        if (recursive && stat.isDirectory() && depth < 3) {
+          readDir(fullPath, depth + 1);
+        }
+      }
+    };
+
+    readDir(p);
+
+    return {
+      ok: true,
+      path: p,
+      items: items.slice(0, 100),
+      count: items.length
+    };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+});
+
+/**
+ * Helper: Escape regex special characters
+ */
+function escapeRegExp(string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}

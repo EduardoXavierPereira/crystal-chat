@@ -815,6 +815,15 @@ async function continueInitAfterSetup() {
     ? ui.homeWidgets
     : ['intro', 'suggestions', 'temp-toggle'];
   state.homeEditMode = !!ui?.homeEditMode;
+  // Load individual tool states (all default to false if not in localStorage)
+  state.toolEnabled_web_search = !!ui?.toolEnabled_web_search;
+  state.toolEnabled_open_link = !!ui?.toolEnabled_open_link;
+  state.toolEnabled_file_read = !!ui?.toolEnabled_file_read;
+  state.toolEnabled_file_write = !!ui?.toolEnabled_file_write;
+  state.toolEnabled_file_edit = !!ui?.toolEnabled_file_edit;
+  state.toolEnabled_file_glob = !!ui?.toolEnabled_file_glob;
+  state.toolEnabled_file_grep = !!ui?.toolEnabled_file_grep;
+  state.toolEnabled_folder_browse = !!ui?.toolEnabled_folder_browse;
   clearPendingAttachments();
   applyThemeAndAccent(state);
 

@@ -16,7 +16,7 @@ export class WebSearchTool extends BaseTool {
 - After getting results, consider using open_link to read full articles if needed`;
 
   isEnabled(state) {
-    return !!state.enableInternet;
+    return state.toolEnabled_web_search === true;
   }
 
   validateArgs(args) {

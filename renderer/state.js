@@ -38,7 +38,16 @@ export function createInitialState() {
     updateMemoryEnabled: true,
     folders: [],
     rootChatIds: [],
-    sidebarSelection: { kind: 'chat', id: null }
+    sidebarSelection: { kind: 'chat', id: null },
+    // Individual tool state (all disabled by default)
+    toolEnabled_web_search: false,
+    toolEnabled_open_link: false,
+    toolEnabled_file_read: false,
+    toolEnabled_file_write: false,
+    toolEnabled_file_edit: false,
+    toolEnabled_file_glob: false,
+    toolEnabled_file_grep: false,
+    toolEnabled_folder_browse: false
   };
 }
 
@@ -64,7 +73,16 @@ export function saveUIState(state) {
       sidebarSelection:
         state.sidebarSelection.kind === 'chat' && state.sidebarSelection.id === TEMP_CHAT_ID
           ? { kind: 'chat', id: null }
-          : state.sidebarSelection
+          : state.sidebarSelection,
+      // Individual tool states
+      toolEnabled_web_search: !!state.toolEnabled_web_search,
+      toolEnabled_open_link: !!state.toolEnabled_open_link,
+      toolEnabled_file_read: !!state.toolEnabled_file_read,
+      toolEnabled_file_write: !!state.toolEnabled_file_write,
+      toolEnabled_file_edit: !!state.toolEnabled_file_edit,
+      toolEnabled_file_glob: !!state.toolEnabled_file_glob,
+      toolEnabled_file_grep: !!state.toolEnabled_file_grep,
+      toolEnabled_folder_browse: !!state.toolEnabled_folder_browse
     };
     localStorage.setItem(UI_STATE_KEY, JSON.stringify(toSave));
   } catch {
@@ -104,6 +122,31 @@ export function loadUIState() {
       }
       if (typeof parsed.foldersOpen === 'undefined') {
         parsed.foldersOpen = true;
+      }
+      // Initialize individual tool states (all default to false/disabled)
+      if (typeof parsed.toolEnabled_web_search === 'undefined') {
+        parsed.toolEnabled_web_search = false;
+      }
+      if (typeof parsed.toolEnabled_open_link === 'undefined') {
+        parsed.toolEnabled_open_link = false;
+      }
+      if (typeof parsed.toolEnabled_file_read === 'undefined') {
+        parsed.toolEnabled_file_read = false;
+      }
+      if (typeof parsed.toolEnabled_file_write === 'undefined') {
+        parsed.toolEnabled_file_write = false;
+      }
+      if (typeof parsed.toolEnabled_file_edit === 'undefined') {
+        parsed.toolEnabled_file_edit = false;
+      }
+      if (typeof parsed.toolEnabled_file_glob === 'undefined') {
+        parsed.toolEnabled_file_glob = false;
+      }
+      if (typeof parsed.toolEnabled_file_grep === 'undefined') {
+        parsed.toolEnabled_file_grep = false;
+      }
+      if (typeof parsed.toolEnabled_folder_browse === 'undefined') {
+        parsed.toolEnabled_folder_browse = false;
       }
     }
     return parsed;

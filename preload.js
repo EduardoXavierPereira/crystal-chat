@@ -12,6 +12,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readLocalFile: (path) => ipcRenderer.invoke('tools:readLocalFile', { path }),
   webSearch: (query) => ipcRenderer.invoke('tools:webSearch', { query }),
   openLink: (url) => ipcRenderer.invoke('tools:openLink', { url }),
+  // File system tools
+  fileRead: (path, offset, limit) => ipcRenderer.invoke('tools:fileRead', { path, offset, limit }),
+  fileWrite: (path, content) => ipcRenderer.invoke('tools:fileWrite', { path, content }),
+  fileEdit: (path, old_string, new_string, replace_all) => ipcRenderer.invoke('tools:fileEdit', { path, old_string, new_string, replace_all }),
+  fileGlob: (pattern, path) => ipcRenderer.invoke('tools:fileGlob', { pattern, path }),
+  fileGrep: (pattern, path, options) => ipcRenderer.invoke('tools:fileGrep', { pattern, path, ...options }),
+  folderBrowse: (path, recursive) => ipcRenderer.invoke('tools:folderBrowse', { path, recursive }),
   onUpdateAvailable: (callback) => {
     if (typeof callback !== 'function') return () => {};
     const listener = (_event, payload) => callback(payload);

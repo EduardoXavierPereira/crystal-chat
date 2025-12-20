@@ -697,7 +697,8 @@ export function createStreamingController({
       try {
         // Tool-call loop: allow a few tool calls per user message.
         const maxToolTurns = 4;
-        const toolEnabled = !!state.enableInternet;
+        // Tools are enabled if internet is on OR if any local tools are available
+        const toolEnabled = true; // Always check for tool calls (file system tools don't need internet)
         const loopMessages = [...sendMessages];
         let toolTurns = 0;
 
@@ -737,7 +738,7 @@ export function createStreamingController({
           await new Promise((r) => setTimeout(r, 400));
 
           const maxToolTurns = 4;
-          const toolEnabled = !!state.enableInternet;
+          const toolEnabled = true; // Always check for tool calls
           const loopMessages = [...sendMessages];
           let toolTurns = 0;
           while (true) {
