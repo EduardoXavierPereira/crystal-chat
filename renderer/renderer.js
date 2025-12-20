@@ -71,6 +71,23 @@ function getPendingFiles() {
   return Array.isArray(state?.pendingFiles) ? state.pendingFiles : [];
 }
 
+function applyReadOnlyMode(state, els) {
+  const isReadOnly = !!state.readOnlyMode;
+
+  // Hide/show prompt form
+  if (els.promptForm) {
+    els.promptForm.classList.toggle('hidden', isReadOnly);
+  }
+
+  // Hide/show all message action buttons
+  if (els.messagesEl) {
+    const actions = els.messagesEl.querySelectorAll('.message-actions');
+    actions.forEach(el => {
+      el.classList.toggle('hidden', isReadOnly);
+    });
+  }
+}
+
 let initCompleted = false;
 let setupSucceeded = false;
 
@@ -895,6 +912,25 @@ async function continueInitAfterSetup() {
     });
     els.magneticScrollToggleEl.appendChild(t.el);
   }
+
+  if (els.readOnlyToggleEl) {
+    els.readOnlyToggleEl.innerHTML = '';
+    const t = createToggle({
+      id: 'read-only-toggle-input',
+      text: '',
+      checked: !!state.readOnlyMode,
+      switchOnRight: true,
+      showText: false,
+      onChange: (v) => {
+        state.readOnlyMode = !!v;
+        saveUIState(state);
+        applyReadOnlyMode(state, els);
+      }
+    });
+    els.readOnlyToggleEl.appendChild(t.el);
+  }
+
+  applyReadOnlyMode(state, els);
 
   setRandomnessSliderFill();
   setTextSizeSliderFill();

@@ -405,6 +405,9 @@ export function renderMessageElement(
   if (msg.role === 'user') {
     const actions = document.createElement('div');
     actions.className = 'message-actions';
+    if (state?.readOnlyMode) {
+      actions.classList.add('hidden');
+    }
 
     actions.appendChild(createCopyActionButton({ msg, messageIndex, onCopy }));
     actions.appendChild(createEditUserActionButton({ msg, messageIndex, onBeginEditUserMessage }));
@@ -418,6 +421,9 @@ export function renderMessageElement(
   if (msg.role === 'assistant' && msg._done !== false) {
     const actions = document.createElement('div');
     actions.className = 'message-actions';
+    if (state?.readOnlyMode) {
+      actions.classList.add('hidden');
+    }
 
     const copyBtn = createCopyActionButton({ msg, messageIndex, onCopy });
 

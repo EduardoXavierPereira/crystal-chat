@@ -33,6 +33,7 @@ export function createInitialState() {
     creativity: 1,
     textSize: 1,
     magneticScroll: false,
+    readOnlyMode: false,
     systemPrompt: DEFAULT_SYSTEM_PROMPT,
     enableInternet: false,
     updateMemoryEnabled: true,
@@ -61,6 +62,7 @@ export function saveUIState(state) {
       randomness: Number.isFinite(state.creativity) ? state.creativity : 1,
       textSize: Number.isFinite(state.textSize) ? state.textSize : 1,
       magneticScroll: !!state.magneticScroll,
+      readOnlyMode: !!state.readOnlyMode,
       systemPrompt: (state.systemPrompt || '').toString(),
       enableInternet: !!state.enableInternet,
       updateMemoryEnabled: typeof state.updateMemoryEnabled === 'boolean' ? state.updateMemoryEnabled : true,
@@ -122,6 +124,9 @@ export function loadUIState() {
       }
       if (typeof parsed.foldersOpen === 'undefined') {
         parsed.foldersOpen = true;
+      }
+      if (typeof parsed.readOnlyMode === 'undefined') {
+        parsed.readOnlyMode = false;
       }
       // Initialize individual tool states (all default to false/disabled)
       if (typeof parsed.toolEnabled_web_search === 'undefined') {

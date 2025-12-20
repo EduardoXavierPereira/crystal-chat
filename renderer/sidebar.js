@@ -10,6 +10,7 @@ export function getEls() {
     textSizeSlider: document.getElementById('text-size-slider'),
     textSizeValue: document.getElementById('text-size-value'),
     magneticScrollToggleEl: document.getElementById('magnetic-scroll-toggle'),
+    readOnlyToggleEl: document.getElementById('read-only-toggle'),
     messagesEl: document.getElementById('messages'),
     promptForm: document.getElementById('prompt-form'),
     promptAttachmentsEl: document.getElementById('prompt-attachments'),

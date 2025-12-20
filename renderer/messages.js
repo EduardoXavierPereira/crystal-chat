@@ -40,7 +40,13 @@ export function renderActiveChat({
 
   if (els.chatHeaderEl) els.chatHeaderEl.classList.remove('hidden');
   if (els.messagesEl) els.messagesEl.classList.remove('hidden');
-  if (els.promptForm) els.promptForm.classList.remove('hidden');
+  if (els.promptForm) {
+    if (state.readOnlyMode) {
+      els.promptForm.classList.add('hidden');
+    } else {
+      els.promptForm.classList.remove('hidden');
+    }
+  }
   if (els.errorEl) els.errorEl.classList.toggle('hidden', els.errorEl.textContent === '');
 
   if (els.chatHeaderTitleEl) {
