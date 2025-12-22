@@ -156,12 +156,8 @@ export function renderActiveChat({
 
     const headerRow = document.createElement('div');
     headerRow.className = 'home-row';
-    const title = document.createElement('div');
-    title.className = 'home-title';
-    title.textContent = 'Your home';
     const headerLeft = document.createElement('div');
     headerLeft.className = 'home-header-left';
-    headerLeft.appendChild(title);
     const editBtn = document.createElement('button');
     editBtn.type = 'button';
     editBtn.className = 'home-edit-btn';
