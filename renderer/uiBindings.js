@@ -1,7 +1,26 @@
+/**
+ * uiBindings.js - Refactored UI binding coordinator
+ * Orchestrates all UI-related functionality through modular controllers
+ *
+ * Modules:
+ * - FileAttachmentHandler: File operations and PDF extraction
+ * - PromptInputController: Prompt input field interactions
+ * - ThemeController: Theme and accent management
+ * - SidebarController: Trash and memories sidebar
+ * - PopoverManager: Hover-based popover behavior
+ * - SelectionAskButton: Text selection button feature
+ */
+
+import { FileAttachmentHandler } from './uiModules/FileAttachmentHandler.js';
+import { PromptInputController } from './uiModules/PromptInputController.js';
+import { ThemeController } from './uiModules/ThemeController.js';
+import { SidebarController } from './uiModules/SidebarController.js';
+import { PopoverManager } from './uiModules/PopoverManager.js';
+import { SelectionAskButton } from './uiModules/SelectionAskButton.js';
+
 export function attachUIBindings({
   els,
   state,
-  tempChatId,
   autosizePrompt,
   clampNumber,
   saveUIState,
@@ -28,562 +47,70 @@ export function attachUIBindings({
   onTrashOpen
 }) {
   const bindingsAbort = new AbortController();
+  const signal = bindingsAbort.signal;
 
-  const prefersDarkMql = (() => {
-    try {
-      return window.matchMedia?.('(prefers-color-scheme: dark)') || null;
-    } catch {
-      return null;
-    }
-  })();
-
-  const resolveTheme = () => {
-    const raw = (state?.theme || 'system').toString();
-    if (raw === 'dark' || raw === 'light') return raw;
-    if (raw !== 'system') return 'dark';
-    return prefersDarkMql?.matches ? 'dark' : 'light';
+  // ============================================================================
+  // File Attachment Handler
+  // ============================================================================
+  const renderPromptAttachments = () => {
+    fileAttachmentHandler.renderAttachments(els);
   };
 
-  const extractPdfText = async (file) => {
-    try {
-      if (!file) return '';
-      const name = (file.name || '').toString().toLowerCase();
-      const type = (file.type || '').toString().toLowerCase();
-      if (type !== 'application/pdf' && !name.endsWith('.pdf')) return '';
-
-      const pdfjs = await import(new URL('../node_modules/pdfjs-dist/build/pdf.mjs', import.meta.url).toString());
-      try {
-        if (pdfjs?.GlobalWorkerOptions) {
-          pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-            '../node_modules/pdfjs-dist/build/pdf.worker.min.mjs',
-            import.meta.url
-          ).toString();
-        }
-      } catch {
-        // ignore
-      }
-
-      const buf = await file.arrayBuffer();
-      const loadingTask = pdfjs.getDocument({ data: new Uint8Array(buf) });
-      const doc = await loadingTask.promise;
-
-      const maxPages = 25;
-      const maxChars = 200000;
-      const pageCount = Math.min(doc.numPages || 0, maxPages);
-
-      const parts = [];
-      let used = 0;
-      for (let i = 1; i <= pageCount; i += 1) {
-        if (used >= maxChars) break;
-        const page = await doc.getPage(i);
-        const tc = await page.getTextContent();
-        const pageText = (tc?.items || [])
-          .map((it) => (it && typeof it.str === 'string' ? it.str : ''))
-          .filter((s) => s)
-          .join(' ')
-          .replace(/\s{2,}/g, ' ')
-          .trim();
-        if (!pageText) continue;
-        parts.push(pageText);
-        used += pageText.length + 2;
-      }
-
-      const raw = parts.join('\n\n');
-      if (!raw) return '';
-      return raw.length > maxChars ? `${raw.slice(0, maxChars)}\n\n[...truncated...]` : raw;
-    } catch {
-      return '';
-    }
-  };
-
-  const attachBinaryFile = async (file) => {
-    try {
-      if (!file) return false;
-      const dataUrl = await new Promise((resolve, reject) => {
-        const fr = new FileReader();
-        fr.onerror = () => reject(new Error('file_read_failed'));
-        fr.onload = () => resolve(String(fr.result || ''));
-        fr.readAsDataURL(file);
-      });
-      if (!Array.isArray(state.pendingFiles)) state.pendingFiles = [];
-      state.pendingFiles = [
-        ...state.pendingFiles,
-        {
-          dataUrl,
-          name: file.name,
-          type: file.type,
-          size: typeof file.size === 'number' ? file.size : 0
-        }
-      ];
-      renderPromptAttachments();
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
-  const applyThemeAndAccent = () => {
-    try {
-      document.documentElement.dataset.theme = resolveTheme();
-    } catch {
-      // ignore
-    }
-    try {
-      document.documentElement.style.setProperty('--accent', (state?.accent || '#7fc9ff').toString());
-    } catch {
-      // ignore
-    }
-  };
-
-  const updateThemeSegmentUI = () => {
-    const theme = (state?.theme || 'system').toString();
-    els.themeSystemBtn?.classList.toggle('active', theme === 'system');
-    els.themeDarkBtn?.classList.toggle('active', theme === 'dark');
-    els.themeLightBtn?.classList.toggle('active', theme === 'light');
-    els.themeSystemBtn?.setAttribute('aria-pressed', theme === 'system' ? 'true' : 'false');
-    els.themeDarkBtn?.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
-    els.themeLightBtn?.setAttribute('aria-pressed', theme === 'light' ? 'true' : 'false');
-  };
-
-  const updateAccentSwatchesUI = () => {
-    const accent = (state?.accent || '#7fc9ff').toString().toLowerCase();
-    const swatches = Array.from(els.accentSwatchesEl?.querySelectorAll?.('.accent-swatch') || []);
-    swatches.forEach((btn) => {
-      const v = (btn?.dataset?.accent || '').toString().toLowerCase();
-      const isActive = v === accent;
-      btn.classList.toggle('active', isActive);
-      btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-    });
-  };
-
-  window.addEventListener(
-    'cc:openMemories',
-    (e) => {
-      const query = (e?.detail?.query || '').toString().trim();
-      focusDockView?.('memories');
-      onMemoriesOpen?.();
-      if (els.memoriesSearchInput) {
-        els.memoriesSearchInput.value = query;
-        els.memoriesSearchInput.focus();
-      }
-      state.memoriesQuery = query.toLowerCase();
-      onMemoriesSearchInput?.();
-    },
-    { signal: bindingsAbort.signal }
-  );
-
-  function renderPromptAttachments() {
-    const root = els.promptAttachmentsEl;
-    if (!root) return;
-
-    const textFile = state.pendingTextFile || null;
-    const images = Array.isArray(state.pendingImages) ? state.pendingImages : [];
-    const files = Array.isArray(state.pendingFiles) ? state.pendingFiles : [];
-    const hasAny = !!(textFile || images.length > 0 || files.length > 0);
-
-    const isPdfText = !!textFile && (textFile.type || '').toString().toLowerCase() === 'application/pdf';
-
-    root.innerHTML = '';
-    root.classList.toggle('hidden', !hasAny);
-    els.promptInsertBtn?.classList.toggle('has-attachment', images.length > 0);
-
-    if (textFile) {
-      const wrap = document.createElement('div');
-      wrap.className = 'prompt-attachment';
-
-      const title = document.createElement('div');
-      title.className = 'prompt-attachment-title';
-      const isPdfText = (textFile.type || '').toString().toLowerCase() === 'application/pdf';
-      title.textContent = `${isPdfText ? 'PDF' : 'Text'}: ${textFile.name || 'file'}`;
-
-      const meta = document.createElement('div');
-      meta.className = 'prompt-attachment-meta';
-      if (typeof textFile.size === 'number' && textFile.size > 0) {
-        meta.textContent = textFile.size < 1024
-          ? `${textFile.size} B`
-          : `${Math.max(1, Math.ceil(textFile.size / 1024))} KB`;
-      } else {
-        meta.textContent = '';
-      }
-
-      const remove = document.createElement('button');
-      remove.type = 'button';
-      remove.className = 'prompt-attachment-remove';
-      remove.setAttribute('aria-label', 'Remove text file');
-      remove.textContent = '×';
-      remove.addEventListener(
-        'click',
-        () => {
-          state.pendingTextFile = null;
-          if (isPdfText && Array.isArray(state.pendingFiles)) {
-            state.pendingFiles = state.pendingFiles.filter(
-              (f) => (f?.type || '').toString().toLowerCase() !== 'application/pdf'
-            );
-          }
-          renderPromptAttachments();
-        },
-        { signal: bindingsAbort.signal }
-      );
-
-      wrap.appendChild(title);
-      if (meta.textContent) wrap.appendChild(meta);
-      wrap.appendChild(remove);
-      root.appendChild(wrap);
-    }
-
-    images.forEach((img, idx) => {
-      if (!img) return;
-      const wrap = document.createElement('div');
-      wrap.className = 'prompt-attachment';
-
-      const thumb = document.createElement('img');
-      thumb.className = 'prompt-attachment-thumb';
-      thumb.alt = 'Attached image';
-      thumb.src = (img.previewUrl || '').toString();
-
-      const title = document.createElement('div');
-      title.className = 'prompt-attachment-title';
-      title.textContent = `Image: ${img.name || 'image'}`;
-
-      const remove = document.createElement('button');
-      remove.type = 'button';
-      remove.className = 'prompt-attachment-remove';
-      remove.setAttribute('aria-label', 'Remove image');
-      remove.textContent = '×';
-      remove.addEventListener(
-        'click',
-        () => {
-          state.pendingImages = images.filter((_, i) => i !== idx);
-          renderPromptAttachments();
-        },
-        { signal: bindingsAbort.signal }
-      );
-
-      wrap.appendChild(thumb);
-      wrap.appendChild(title);
-      wrap.appendChild(remove);
-      root.appendChild(wrap);
-    });
-
-    files
-      .filter((f) => f && (!isPdfText || (f.type || '').toString().toLowerCase() !== 'application/pdf'))
-      .forEach((file, idx) => {
-        const wrap = document.createElement('div');
-        wrap.className = 'prompt-attachment';
-
-        const title = document.createElement('div');
-        title.className = 'prompt-attachment-title';
-        title.textContent = `File: ${file.name || 'file'}`;
-
-        const meta = document.createElement('div');
-        meta.className = 'prompt-attachment-meta';
-        if (typeof file.size === 'number' && file.size > 0) {
-          meta.textContent = file.size < 1024
-            ? `${file.size} B`
-            : `${Math.max(1, Math.ceil(file.size / 1024))} KB`;
-        } else {
-          meta.textContent = '';
-        }
-
-        const remove = document.createElement('button');
-        remove.type = 'button';
-        remove.className = 'prompt-attachment-remove';
-        remove.setAttribute('aria-label', 'Remove file');
-        remove.textContent = '×';
-        remove.addEventListener(
-          'click',
-          () => {
-            state.pendingFiles = files.filter((_, i) => i !== idx);
-            renderPromptAttachments();
-          },
-          { signal: bindingsAbort.signal }
-        );
-
-        wrap.appendChild(title);
-        if (meta.textContent) wrap.appendChild(meta);
-        wrap.appendChild(remove);
-        root.appendChild(wrap);
-      });
-  }
-
-  renderPromptAttachments();
-
-  const attachTextFile = async (file) => {
-    try {
-      if (!file) return false;
-      const text = await file.text();
-      const cap = 200000;
-      const clipped = text.length > cap ? `${text.slice(0, cap)}\n\n[...truncated...]` : text;
-      state.pendingTextFile = {
-        name: file.name,
-        type: file.type,
-        size: typeof file.size === 'number' ? file.size : 0,
-        text: clipped
-      };
-      renderPromptAttachments();
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
-  const attachImageFile = async (file) => {
-    try {
-      if (!file) return false;
-      const dataUrl = await new Promise((resolve, reject) => {
-        const fr = new FileReader();
-        fr.onerror = () => reject(new Error('file_read_failed'));
-        fr.onload = () => resolve(String(fr.result || ''));
-        fr.readAsDataURL(file);
-      });
-
-      const idx = dataUrl.indexOf(',');
-      const base64 = idx >= 0 ? dataUrl.slice(idx + 1) : dataUrl;
-      if (!Array.isArray(state.pendingImages)) state.pendingImages = [];
-      state.pendingImages = [...state.pendingImages, { base64, name: file.name, type: file.type, previewUrl: dataUrl }];
-      renderPromptAttachments();
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
-  const attachPdfFile = async (file) => {
-    try {
-      if (!file) return false;
-
-      const ok = await attachBinaryFile(file);
-      if (!ok) return false;
-
-      const extracted = await extractPdfText(file);
-      const text = extracted
-        ? extracted
-        : '[PDF text extraction failed. This PDF may be scanned (image-only) or the PDF parser could not load. Try OCR or a text-based PDF.]';
-      state.pendingTextFile = {
-        name: file.name,
-        type: file.type,
-        size: typeof file.size === 'number' ? file.size : 0,
-        text
-      };
-      renderPromptAttachments();
-
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
-  const classifyAndAttachFile = async (file) => {
-    if (!file) return false;
-    const type = (file.type || '').toString();
-    const name = (file.name || '').toString().toLowerCase();
-    const isImage = type.startsWith('image/');
-    const isTextLike = type.startsWith('text/') || /\.(md|txt|json|csv|js|ts|py|html|css|yaml|yml)$/i.test(name);
-    const isPdf = type === 'application/pdf' || /\.pdf$/i.test(name);
-    if (isImage) return await attachImageFile(file);
-    if (isTextLike) return await attachTextFile(file);
-    if (isPdf) return await attachPdfFile(file);
-    return await attachBinaryFile(file);
-  };
-
-  window.addEventListener('beforeunload', () => bindingsAbort.abort(), { signal: bindingsAbort.signal });
-
-  if (prefersDarkMql?.addEventListener) {
-    prefersDarkMql.addEventListener(
-      'change',
-      () => {
-        if ((state?.theme || 'system').toString() !== 'system') return;
-        applyThemeAndAccent();
-      },
-      { signal: bindingsAbort.signal }
-    );
-  } else if (prefersDarkMql?.addListener) {
-    const handler = () => {
-      if ((state?.theme || 'system').toString() !== 'system') return;
-      applyThemeAndAccent();
-    };
-    prefersDarkMql.addListener(handler);
-    bindingsAbort.signal.addEventListener(
-      'abort',
-      () => {
-        try {
-          prefersDarkMql.removeListener(handler);
-        } catch {
-          // ignore
-        }
-      },
-      { once: true }
-    );
-  }
-
-  els.promptForm.addEventListener('submit', handleSubmit);
-  els.promptInput.addEventListener('input', () => {
-    autosizePrompt(els.promptInput);
-    updateSendButtonEnabled();
+  const fileAttachmentHandler = new FileAttachmentHandler({
+    state,
+    renderCallback: renderPromptAttachments,
+    signal
   });
 
-  els.promptInput.addEventListener(
-    'paste',
-    async (e) => {
-      const dt = e?.clipboardData;
-      if (!dt) return;
-      let handled = false;
+  // Initial render
+  fileAttachmentHandler.renderAttachments(els);
 
-      const hasDirectFiles = Array.from(dt.files || []).length > 0;
-      const hasFileItems = Array.from(dt.items || []).some((it) => it && it.kind === 'file');
-      const types = Array.from(dt.types || []).map((t) => (t || '').toString().toLowerCase());
-      const hasUriListType = types.includes('text/uri-list');
-
-      // Important: default paste happens immediately; if we wait for async work,
-      // the file path text may already be inserted. Prevent synchronously when
-      // clipboard looks like a file paste.
-      if (hasDirectFiles || hasFileItems || hasUriListType) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
-
-      // 1) Best case: browser/Electron provides actual files
-      const directFiles = Array.from(dt.files || []);
-      for (const f of directFiles) {
-        if (handled) break;
-        handled = await classifyAndAttachFile(f);
-      }
-
-      // 2) Some platforms expose file-like clipboard items
-      if (!handled) {
-        const items = Array.from(dt.items || []);
-        for (const it of items) {
-          if (handled) break;
-          if (it.kind !== 'file') continue;
-          const f = it.getAsFile?.();
-          if (!f) continue;
-          handled = await classifyAndAttachFile(f);
-        }
-      }
-
-      // 3) Linux file managers commonly paste file URIs/paths as text.
-      if (!handled) {
-        const uriList = (dt.getData?.('text/uri-list') || '').toString();
-        const plain = (dt.getData?.('text/plain') || '').toString();
-        const pick = (uriList || plain || '').trim();
-        const firstLine = pick.split(/\r?\n/).map((l) => l.trim()).find((l) => l && !l.startsWith('#'));
-
-        if (firstLine && window.electronAPI?.readLocalFile) {
-          try {
-            const res = await window.electronAPI.readLocalFile(firstLine);
-            if (res && res.ok && res.kind === 'image' && res.base64) {
-              if (!Array.isArray(state.pendingImages)) state.pendingImages = [];
-              state.pendingImages = [
-                ...state.pendingImages,
-                {
-                  base64: res.base64,
-                  name: res.name,
-                  type: res.type,
-                  previewUrl: `data:${(res.type || 'image/*').toString()};base64,${res.base64}`
-                }
-              ];
-              renderPromptAttachments();
-              handled = true;
-            } else if (res && res.ok && res.kind === 'text' && typeof res.text === 'string') {
-              state.pendingTextFile = {
-                name: res.name,
-                type: res.type,
-                size: typeof res.size === 'number' ? res.size : 0,
-                text: res.text
-              };
-              renderPromptAttachments();
-              handled = true;
-            }
-          } catch {
-            // ignore
-          }
-        }
-      }
-
-      if (handled) {
-        // default already prevented above for file-like pastes
-        // (keep this block for safety if conditions change)
-        e.preventDefault();
-        e.stopPropagation();
-      }
-    },
-    { signal: bindingsAbort.signal }
-  );
-
-  const onDragOver = (e) => {
-    try {
-      if (!e) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'copy';
-    } catch {
-      // ignore
-    }
-  };
-
-  const onDrop = async (e) => {
-    const files = Array.from(e?.dataTransfer?.files || []);
-    if (!files.length) return;
-    e.preventDefault();
-    e.stopPropagation();
-
-    for (const f of files) {
-      await classifyAndAttachFile(f);
-    }
-  };
-
-  els.promptForm?.addEventListener('dragover', onDragOver, { signal: bindingsAbort.signal });
-  els.promptForm?.addEventListener('drop', onDrop, { signal: bindingsAbort.signal });
-  window.addEventListener('dragover', onDragOver, { signal: bindingsAbort.signal });
-  window.addEventListener('drop', onDrop, { signal: bindingsAbort.signal });
-
-  els.promptInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit(e);
-    }
+  // ============================================================================
+  // Prompt Input Controller
+  // ============================================================================
+  new PromptInputController({
+    els,
+    state,
+    fileAttachmentHandler,
+    autosizePrompt,
+    updateSendButtonEnabled,
+    handleSubmit,
+    abortStreaming,
+    signal
   });
 
-  els.sendBtn?.addEventListener('click', (e) => {
-    if (!state.isStreaming) return;
-    e.preventDefault();
-    e.stopPropagation();
-    abortStreaming?.();
+  // ============================================================================
+  // Theme Controller
+  // ============================================================================
+  new ThemeController({
+    els,
+    state,
+    saveUIState,
+    signal
   });
 
-  const attachHoverPopover = ({ btn, popover, open, close }) => {
-    let closeTimer = null;
+  // ============================================================================
+  // Sidebar Controller
+  // ============================================================================
+  new SidebarController({
+    els,
+    state,
+    applySidebarSelection,
+    focusDockView,
+    onMemoriesSearchInput,
+    onMemoriesAdd,
+    onMemoriesOpen,
+    onTrashSearchInput,
+    onTrashRestoreAll,
+    onTrashDeleteAll,
+    onTrashOpen,
+    signal
+  });
 
-    const clearCloseTimer = () => {
-      if (!closeTimer) return;
-      clearTimeout(closeTimer);
-      closeTimer = null;
-    };
-
-    const scheduleClose = () => {
-      clearCloseTimer();
-      closeTimer = setTimeout(() => {
-        close();
-      }, 150);
-    };
-
-    btn?.addEventListener('mouseenter', () => {
-      clearCloseTimer();
-      open();
-    });
-    btn?.addEventListener('mouseleave', () => {
-      scheduleClose();
-    });
-
-    popover?.addEventListener('mouseenter', () => {
-      clearCloseTimer();
-      open();
-    });
-    popover?.addEventListener('mouseleave', () => {
-      scheduleClose();
-    });
-  };
-
-  attachHoverPopover({
+  // ============================================================================
+  // Popover Managers
+  // ============================================================================
+  new PopoverManager({
     btn: els.promptToolsBtn,
     popover: els.promptToolsPopover,
     open: () => {
@@ -591,7 +118,8 @@ export function attachUIBindings({
       if (!els.promptToolsPopover.classList.contains('hidden')) return;
       togglePromptToolsPopover();
     },
-    close: () => closePromptToolsPopover()
+    close: () => closePromptToolsPopover(),
+    signal
   });
 
   const closePromptInsertPopover = () => {
@@ -607,7 +135,7 @@ export function attachUIBindings({
     els.promptInsertBtn.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
   };
 
-  attachHoverPopover({
+  new PopoverManager({
     btn: els.promptInsertBtn,
     popover: els.promptInsertPopover,
     open: () => {
@@ -615,16 +143,32 @@ export function attachUIBindings({
       if (!els.promptInsertPopover.classList.contains('hidden')) return;
       togglePromptInsertPopover();
     },
-    close: () => closePromptInsertPopover()
+    close: () => closePromptInsertPopover(),
+    signal
   });
 
+  new PopoverManager({
+    btn: els.chatHeaderToolsBtn,
+    popover: els.chatHeaderToolsPopover,
+    open: () => {
+      if (!els.chatHeaderToolsPopover || !els.chatHeaderToolsBtn) return;
+      if (!els.chatHeaderToolsPopover.classList.contains('hidden')) return;
+      toggleChatHeaderToolsPopover?.();
+    },
+    close: () => closeChatHeaderToolsPopover?.(),
+    signal
+  });
+
+  // ============================================================================
+  // Prompt Insert Menu Buttons
+  // ============================================================================
   els.promptInsertBtn?.addEventListener(
     'click',
     (e) => {
       e.preventDefault();
       e.stopPropagation();
     },
-    { signal: bindingsAbort.signal }
+    { signal }
   );
 
   els.promptInsertTextBtn?.addEventListener(
@@ -635,7 +179,7 @@ export function attachUIBindings({
       closePromptInsertPopover();
       els.promptInsertTextInput?.click();
     },
-    { signal: bindingsAbort.signal }
+    { signal }
   );
 
   els.promptInsertImageBtn?.addEventListener(
@@ -646,7 +190,7 @@ export function attachUIBindings({
       closePromptInsertPopover();
       els.promptInsertImageInput?.click();
     },
-    { signal: bindingsAbort.signal }
+    { signal }
   );
 
   els.promptInsertTextInput?.addEventListener(
@@ -655,7 +199,7 @@ export function attachUIBindings({
       const file = els.promptInsertTextInput?.files?.[0];
       try {
         if (!file) return;
-        await classifyAndAttachFile(file);
+        await fileAttachmentHandler.classifyAndAttachFile(file);
       } catch {
         // ignore
       } finally {
@@ -666,7 +210,7 @@ export function attachUIBindings({
         }
       }
     },
-    { signal: bindingsAbort.signal }
+    { signal }
   );
 
   els.promptInsertImageInput?.addEventListener(
@@ -675,7 +219,7 @@ export function attachUIBindings({
       const file = els.promptInsertImageInput?.files?.[0];
       try {
         if (!file) return;
-        await classifyAndAttachFile(file);
+        await fileAttachmentHandler.classifyAndAttachFile(file);
       } catch {
         // ignore
       } finally {
@@ -686,20 +230,12 @@ export function attachUIBindings({
         }
       }
     },
-    { signal: bindingsAbort.signal }
+    { signal }
   );
 
-  attachHoverPopover({
-    btn: els.chatHeaderToolsBtn,
-    popover: els.chatHeaderToolsPopover,
-    open: () => {
-      if (!els.chatHeaderToolsPopover || !els.chatHeaderToolsBtn) return;
-      if (!els.chatHeaderToolsPopover.classList.contains('hidden')) return;
-      toggleChatHeaderToolsPopover?.();
-    },
-    close: () => closeChatHeaderToolsPopover?.()
-  });
-
+  // ============================================================================
+  // Keyboard & Global Event Handlers
+  // ============================================================================
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       closePromptToolsPopover();
@@ -717,9 +253,12 @@ export function attachUIBindings({
       if (els.promptInsertPopover?.contains(t)) return;
       closePromptInsertPopover();
     },
-    { signal: bindingsAbort.signal }
+    { signal }
   );
 
+  // ============================================================================
+  // Settings Panel Controls (Sliders)
+  // ============================================================================
   if (els.creativitySlider) {
     els.creativitySlider.addEventListener('input', () => {
       state.creativity = clampNumber(els.creativitySlider.value, 0, 2, 1);
@@ -739,6 +278,9 @@ export function attachUIBindings({
     });
   }
 
+  // ============================================================================
+  // System Prompt Input
+  // ============================================================================
   if (els.systemPromptInput) {
     els.systemPromptInput.addEventListener('input', () => {
       state.systemPrompt = (els.systemPromptInput.value || '').toString();
@@ -746,6 +288,9 @@ export function attachUIBindings({
     });
   }
 
+  // ============================================================================
+  // Chat Search & New Chat Button
+  // ============================================================================
   els.chatSearchInput?.addEventListener('input', () => {
     state.chatQuery = (els.chatSearchInput.value || '').trim().toLowerCase();
     saveUIState(state);
@@ -761,121 +306,18 @@ export function attachUIBindings({
     els.promptInput.focus();
   });
 
-  const onThemeClick = (e) => {
-    const btn = e?.currentTarget;
-    const next = (btn?.dataset?.theme || '').toString();
-    if (next !== 'system' && next !== 'dark' && next !== 'light') return;
-    state.theme = next;
-    applyThemeAndAccent();
-    updateThemeSegmentUI();
-    saveUIState(state);
-  };
-
-  els.themeSystemBtn?.addEventListener('click', onThemeClick, { signal: bindingsAbort.signal });
-  els.themeDarkBtn?.addEventListener('click', onThemeClick, { signal: bindingsAbort.signal });
-  els.themeLightBtn?.addEventListener('click', onThemeClick, { signal: bindingsAbort.signal });
-
-  els.accentSwatchesEl?.addEventListener(
-    'click',
-    (e) => {
-      const btn = e?.target?.closest?.('.accent-swatch');
-      if (!btn || !els.accentSwatchesEl.contains(btn)) return;
-      const next = (btn?.dataset?.accent || '').toString();
-      if (!next) return;
-      state.accent = next;
-      applyThemeAndAccent();
-      updateAccentSwatchesUI();
-      saveUIState(state);
-    },
-    { signal: bindingsAbort.signal }
-  );
-
-  updateThemeSegmentUI();
-  updateAccentSwatchesUI();
-
-  els.trashBtn?.addEventListener('click', () => {
-    applySidebarSelection?.({ kind: 'trash' });
-    focusDockView?.('trash');
-    onTrashOpen?.();
-    if (els.trashSearchInput) els.trashSearchInput.focus();
-    els.trashBtn?.classList.add('active');
-    els.memoriesBtn?.classList.remove('active');
-  });
-
-  els.memoriesBtn?.addEventListener('click', () => {
-    applySidebarSelection?.({ kind: 'memories' });
-    focusDockView?.('memories');
-    onMemoriesOpen?.();
-    if (els.memoriesSearchInput) els.memoriesSearchInput.focus();
-    els.memoriesBtn?.classList.add('active');
-    els.trashBtn?.classList.remove('active');
-  });
-
-  window.addEventListener(
-    'cc:memoriesChanged',
-    () => {
-      const buttonActive = !!els.memoriesBtn?.classList?.contains?.('active');
-      const selectionActive = state?.sidebarSelection?.kind === 'memories';
-      const noButton = !els.memoriesBtn;
-      if (noButton || buttonActive || selectionActive) onMemoriesOpen?.();
-    },
-    { signal: bindingsAbort.signal }
-  );
-
-  window.addEventListener(
-    'cc:trashChanged',
-    () => {
-      const buttonActive = !!els.trashBtn?.classList?.contains?.('active');
-      const selectionActive = state?.sidebarSelection?.kind === 'trash';
-      const noButton = !els.trashBtn;
-      if (noButton || buttonActive || selectionActive) onTrashOpen?.();
-    },
-    { signal: bindingsAbort.signal }
-  );
-
+  // ============================================================================
+  // Folder Toggle
+  // ============================================================================
   els.foldersToggleBtn?.addEventListener('click', () => {
     state.foldersOpen = !(typeof state.foldersOpen === 'boolean' ? state.foldersOpen : true);
     saveUIState(state);
     renderChatsUI();
   });
 
-  els.trashSearchInput?.addEventListener('input', () => {
-    state.trashQuery = (els.trashSearchInput.value || '').trim().toLowerCase();
-    onTrashSearchInput?.();
-  });
-
-  els.memoriesSearchInput?.addEventListener('input', () => {
-    state.memoriesQuery = (els.memoriesSearchInput.value || '').trim().toLowerCase();
-    onMemoriesSearchInput?.();
-  });
-
-  const runAddMemory = async () => {
-    const v = (els.memoriesAddInput?.value || '').toString().trim();
-    if (!v) return;
-    els.memoriesAddInput.value = '';
-    await onMemoriesAdd?.(v);
-  };
-
-  els.memoriesAddBtn?.addEventListener('click', async (e) => {
-    e.preventDefault();
-    await runAddMemory();
-  });
-
-  els.memoriesAddInput?.addEventListener('keydown', async (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      await runAddMemory();
-    }
-  });
-
-  els.trashRestoreAllBtn?.addEventListener('click', async () => {
-    await onTrashRestoreAll?.();
-  });
-
-  els.trashDeleteAllBtn?.addEventListener('click', async () => {
-    await onTrashDeleteAll?.();
-  });
-
+  // ============================================================================
+  // Confirmation Modal
+  // ============================================================================
   els.confirmCancelBtn?.addEventListener('click', () => {
     closeConfirm(els, (v) => (state.confirmAction = v));
   });
@@ -892,179 +334,26 @@ export function attachUIBindings({
     if (e.target === els.confirmModalEl) closeConfirm(els, (v) => (state.confirmAction = v));
   });
 
-  const selectionAsk = (() => {
-    let btn = null;
-    let raf = null;
-
-    const hide = () => {
-      if (!btn) return;
-      btn.classList.add('hidden');
-      btn.removeAttribute('data-selection-text');
-    };
-
-    const ensureBtn = () => {
-      if (btn) return btn;
-      btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'selection-ask-btn hidden';
-      btn.textContent = 'Ask Crystal Chat';
-      btn.addEventListener(
-        'click',
-        (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-
-          const text = (btn?.getAttribute('data-selection-text') || '').toString();
-          if (!text) return;
-
-          const cap = 200000;
-          const clipped = text.length > cap ? `${text.slice(0, cap)}\n\n[...truncated...]` : text;
-          state.pendingTextFile = {
-            name: 'Selection.txt',
-            type: 'text/plain',
-            size: clipped.length,
-            text: clipped
-          };
-          renderPromptAttachments();
-          hide();
-          try {
-            els.promptInput?.focus();
-          } catch {
-            // ignore
-          }
-        },
-        { signal: bindingsAbort.signal }
-      );
-
-      document.body.appendChild(btn);
-      bindingsAbort.signal.addEventListener(
-        'abort',
-        () => {
-          try {
-            btn?.remove();
-          } catch {
-            // ignore
-          }
-          btn = null;
-        },
-        { once: true }
-      );
-
-      return btn;
-    };
-
-    const getSelectionState = () => {
-      try {
-        const sel = window.getSelection?.();
-        if (!sel) return null;
-        if (sel.type !== 'Range') return null;
-        if (sel.rangeCount <= 0) return null;
-        const range = sel.getRangeAt(0);
-        const rawText = (sel.toString?.() || '').toString();
-        const text = rawText.trim();
-        if (!text) return null;
-
-        const node = range?.commonAncestorContainer;
-        const el = node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
-        if (!el) return null;
-
-        const assistantContent = el.closest?.('.message.assistant .message-content');
-        if (!assistantContent) return null;
-
-        const rect = range.getBoundingClientRect?.();
-        if (!rect || !Number.isFinite(rect.left) || !Number.isFinite(rect.top)) return null;
-        if (rect.width <= 0 && rect.height <= 0) return null;
-
-        return { text, rect };
-      } catch {
-        return null;
-      }
-    };
-
-    const positionBtn = ({ rect }) => {
-      const b = ensureBtn();
-      const pad = 8;
-      const margin = 8;
-
-      const wasHidden = b.classList.contains('hidden');
-      if (wasHidden) {
-        b.classList.remove('hidden');
-        b.style.visibility = 'hidden';
-      }
-
-      const viewportLeft = window.scrollX;
-      const viewportTop = window.scrollY;
-      const viewportRight = window.scrollX + window.innerWidth;
-      const viewportBottom = window.scrollY + window.innerHeight;
-
-      const selectionLeft = rect.left + window.scrollX;
-      const selectionRight = rect.right + window.scrollX;
-      const selectionTop = rect.top + window.scrollY;
-
-      const btnRect = b.getBoundingClientRect();
-      const bw = Math.max(1, Math.round(btnRect.width || b.offsetWidth || 1));
-      const bh = Math.max(1, Math.round(btnRect.height || b.offsetHeight || 1));
-
-      const xRight = Math.round(selectionRight + pad);
-      const xLeft = Math.round(selectionLeft - pad - bw);
-
-      let x;
-      if (xRight + bw <= viewportRight - margin) {
-        x = xRight;
-      } else if (xLeft >= viewportLeft + margin) {
-        x = xLeft;
-      } else {
-        x = Math.min(Math.max(xRight, viewportLeft + margin), viewportRight - margin - bw);
-      }
-
-      const yPreferred = Math.round(selectionTop - 6);
-      const y = Math.min(Math.max(yPreferred, viewportTop + margin), viewportBottom - margin - bh);
-
-      b.style.left = `${x}px`;
-      b.style.top = `${y}px`;
-
-      if (wasHidden) {
-        b.style.visibility = '';
-        b.classList.add('hidden');
-      }
-    };
-
-    const update = () => {
-      if (raf) return;
-      raf = window.requestAnimationFrame(() => {
-        raf = null;
-        const s = getSelectionState();
-        if (!s) {
-          hide();
-          return;
-        }
-        const b = ensureBtn();
-        b.setAttribute('data-selection-text', s.text);
-        positionBtn(s);
-        b.classList.remove('hidden');
-      });
-    };
-
-    const onDocMouseDown = (e) => {
-      const t = e?.target;
-      if (!t || !(t instanceof Element)) return;
-      if (t.closest?.('.selection-ask-btn')) return;
-      hide();
-    };
-
-    return { update, hide, onDocMouseDown };
-  })();
-
-  document.addEventListener('selectionchange', () => selectionAsk.update(), { signal: bindingsAbort.signal });
-  document.addEventListener('mouseup', () => selectionAsk.update(), { signal: bindingsAbort.signal });
-  document.addEventListener('keyup', () => selectionAsk.update(), { signal: bindingsAbort.signal });
-  window.addEventListener('blur', () => selectionAsk.hide(), { signal: bindingsAbort.signal, capture: true });
-  window.addEventListener('scroll', () => selectionAsk.hide(), { signal: bindingsAbort.signal, capture: true });
-  document.addEventListener('mousedown', (e) => selectionAsk.onDocMouseDown(e), { signal: bindingsAbort.signal, capture: true });
-
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && els.confirmModalEl && !els.confirmModalEl.classList.contains('hidden')) {
       closeConfirm(els, (v) => (state.confirmAction = v));
     }
   });
- }
+
+  // ============================================================================
+  // Selection Ask Button
+  // ============================================================================
+  new SelectionAskButton({
+    els,
+    state,
+    fileAttachmentHandler,
+    signal
+  });
+
+  // ============================================================================
+  // Cleanup
+  // ============================================================================
+  window.addEventListener('beforeunload', () => bindingsAbort.abort());
+
+  return bindingsAbort;
+}
