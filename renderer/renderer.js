@@ -17,6 +17,7 @@ import {
 } from './sidebar.js';
 
 import { autosizePrompt, showError, hideError, openConfirm, closeConfirm } from './input.js';
+import { getDraft } from './utils/draftManager.js';
 import { renderTrash } from './trash.js';
 import { renderActiveChat, updateRenderedMessage } from './messages.js';
 import { createCustomDropdown } from './customDropdown.js';
@@ -576,6 +577,9 @@ function renderChatsUI() {
 }
 
 function renderActiveChatUI() {
+  // Restore draft BEFORE rendering the chat, so it doesn't get overwritten
+  const draftToRestore = getDraft();
+
   renderActiveChat({
     els,
     state,
@@ -593,6 +597,14 @@ function renderActiveChatUI() {
     onApplyEditUserMessage: (idx, content) => chatController?.applyEditUserMessage?.(idx, content),
     onSwitchBranch: (branchId) => chatController?.switchToBranch?.(branchId)
   });
+
+  // Restore draft AFTER rendering (use requestAnimationFrame to ensure it happens after DOM updates)
+  if (els.promptInput && draftToRestore) {
+    requestAnimationFrame(() => {
+      els.promptInput.value = draftToRestore;
+      autosizePrompt(els.promptInput);
+    });
+  }
 }
 
 async function handleSubmit(event) {

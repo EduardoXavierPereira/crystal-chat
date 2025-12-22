@@ -3,6 +3,8 @@
  * Handles input events, file attachments via paste/drop, and keyboard shortcuts
  */
 
+import { saveDraft } from '../utils/draftManager.js';
+
 export class PromptInputController {
   constructor({
     els,
@@ -23,6 +25,8 @@ export class PromptInputController {
     this.abortStreaming = abortStreaming;
     this.signal = signal;
 
+    this.draftSaveTimeout = null;
+
     this.attachListeners();
   }
 
@@ -31,6 +35,7 @@ export class PromptInputController {
     this.els.promptInput.addEventListener('input', () => {
       this.autosizePrompt(this.els.promptInput);
       this.updateSendButtonEnabled();
+      this.scheduleDraftSave();
     });
 
     // Send button while streaming
@@ -58,8 +63,11 @@ export class PromptInputController {
     // Drag and drop
     this.attachDragDropListeners();
 
-    // Cleanup on beforeunload
-    window.addEventListener('beforeunload', () => this.signal.dispatchEvent(new Event('abort')));
+    // Save draft immediately on page unload (before debounce completes)
+    window.addEventListener('beforeunload', () => {
+      this.saveDraftImmediately();
+      this.signal.dispatchEvent(new Event('abort'));
+    });
   }
 
   async handlePaste(e) {
@@ -173,5 +181,19 @@ export class PromptInputController {
     this.els.promptForm?.addEventListener('drop', onDrop, { signal: this.signal });
     window.addEventListener('dragover', onDragOver, { signal: this.signal });
     window.addEventListener('drop', onDrop, { signal: this.signal });
+  }
+
+  scheduleDraftSave() {
+    // Clear existing timeout
+    if (this.draftSaveTimeout) clearTimeout(this.draftSaveTimeout);
+
+    // Schedule save with debounce (500ms) to avoid excessive localStorage writes
+    this.draftSaveTimeout = setTimeout(() => {
+      this.saveDraftImmediately();
+    }, 500);
+  }
+
+  saveDraftImmediately() {
+    saveDraft(this.els.promptInput.value);
   }
 }

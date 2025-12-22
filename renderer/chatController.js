@@ -1,3 +1,5 @@
+import { clearDraft } from './utils/draftManager.js';
+
 export function createChatController({
   els,
   state,
@@ -150,6 +152,9 @@ export function createChatController({
     els.promptInput.value = '';
     autosizePrompt(els.promptInput);
     updateSendButtonEnabled();
+
+    // Clear the floating draft after sending
+    clearDraft();
 
     const currentId = state.sidebarSelection.kind === 'chat' ? state.sidebarSelection.id : null;
     let chat = currentId === tempChatId ? state.tempChat : state.chats.find((c) => c.id === currentId);
