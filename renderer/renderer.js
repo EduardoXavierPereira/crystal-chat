@@ -22,7 +22,7 @@ import { renderActiveChat, updateRenderedMessage } from './messages.js';
 import { createCustomDropdown } from './customDropdown.js';
 import { formatModelName } from './formatModelName.js';
 import { createTrashActions } from './trashActions.js';
-import { createFoldersActions } from './foldersActions.js';
+import { FoldersController } from './uiModules/FoldersController.js';
 import { createChatSidebarController } from './chatSidebarController.js';
 import { createStreamingController } from './streamingController.js';
 import { runInit } from './init.js';
@@ -366,35 +366,6 @@ async function continueInitAfterSetup() {
   }
 
   state.pendingNew = state.sidebarSelection.kind === 'chat' && state.sidebarSelection.id === null;
-  foldersActions = createFoldersActions({
-    els,
-    state,
-    saveUIState,
-    renderChatsUI,
-    applySidebarSelection: (sel) => chatSidebarController?.applySidebarSelection(sel),
-    openConfirm
-  });
-
-  foldersActions?.attachBindings?.();
-
-  window.addEventListener('cc:moveChatToFolder', (e) => {
-    const chatId = e?.detail?.chatId;
-    const folderId = e?.detail?.folderId ?? null;
-    if (typeof chatId !== 'string' || !chatId) return;
-    foldersActions?.moveChatToFolder?.(chatId, folderId);
-  });
-
-  window.addEventListener('cc:removeChatFromFolders', (e) => {
-    const chatId = e?.detail?.chatId;
-    if (typeof chatId !== 'string' || !chatId) return;
-    foldersActions?.removeChatFromFolders?.(chatId);
-  });
-
-  window.addEventListener('cc:removeChatFromRoot', (e) => {
-    const chatId = e?.detail?.chatId;
-    if (typeof chatId !== 'string' || !chatId) return;
-    foldersActions?.removeChatFromRoot?.(chatId);
-  });
 
   window.addEventListener('cc:trashChat', (e) => {
     const chatId = e?.detail?.chatId;
@@ -467,7 +438,6 @@ async function continueInitAfterSetup() {
     focusDockView
   });
 
-  renderChatsUI();
   renderActiveChatUI();
 
   if (!magneticScroll && els.messagesEl) {
@@ -494,7 +464,7 @@ async function continueInitAfterSetup() {
     clearPendingAttachments
   });
 
-  attachUIBindings({
+  const bindingsAbort = attachUIBindings({
     els,
     state,
     tempChatId: TEMP_CHAT_ID,
@@ -523,6 +493,41 @@ async function continueInitAfterSetup() {
     onTrashDeleteAll: () => trashActions?.requestDeleteAllTrashed(),
     onTrashOpen: () => trashActions?.renderTrashUI()
   });
+
+  // Initialize folders controller with cleanup signal from UI bindings
+  foldersActions = new FoldersController({
+    els,
+    state,
+    saveUIState,
+    renderChatsUI,
+    applySidebarSelection: (sel) => chatSidebarController?.applySidebarSelection(sel),
+    openConfirm,
+    signal: bindingsAbort.signal
+  });
+
+  // Now render chats UI with folders controller fully initialized
+  renderChatsUI();
+
+  // Register folder action event handlers
+  window.addEventListener('cc:moveChatToFolder', (e) => {
+    const chatId = e?.detail?.chatId;
+    const folderId = e?.detail?.folderId ?? null;
+    if (typeof chatId !== 'string' || !chatId) return;
+    foldersActions?.moveChatToFolder?.(chatId, folderId);
+  });
+
+  window.addEventListener('cc:removeChatFromFolders', (e) => {
+    const chatId = e?.detail?.chatId;
+    if (typeof chatId !== 'string' || !chatId) return;
+    foldersActions?.removeChatFromFolders?.(chatId);
+  });
+
+  window.addEventListener('cc:removeChatFromRoot', (e) => {
+    const chatId = e?.detail?.chatId;
+    if (typeof chatId !== 'string' || !chatId) return;
+    foldersActions?.removeChatFromRoot?.(chatId);
+  });
+
   if (els.chatSearchInput) {
     els.chatSearchInput.value = state.chatQuery;
   }
