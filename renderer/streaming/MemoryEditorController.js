@@ -342,6 +342,14 @@ export class MemoryEditorController {
   }
 
   /**
+   * Check if memory editor is currently running
+   * @returns {boolean}
+   */
+  isRunning() {
+    return this.memoryEditorRunning;
+  }
+
+  /**
    * Destroy controller and clean up resources
    */
   destroy() {

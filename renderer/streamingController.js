@@ -399,16 +399,21 @@ export function createStreamingController({
       }
     } finally {
       state.isStreaming = false;
-      if (!memoryEditor.memoryEditorRunning) {
+      streamAbortController = null;
+
+      // Reset send button immediately after streaming ends
+      if (els.sendBtn) {
+        els.sendBtn.setAttribute('aria-label', 'Send');
+        els.sendBtn.innerHTML = '<span>➤</span>';
+      }
+
+      // Hide typing indicator only if memory editor is not running
+      // (memory editor will hide it when it completes)
+      if (!memoryEditor.isRunning()) {
         els.typingIndicator?.classList.add('hidden');
         typingIndicator.hide();
       } else if (els.typingIndicatorLabelEl) {
         els.typingIndicatorLabelEl.textContent = 'Updating memories...';
-      }
-      streamAbortController = null;
-      if (els.sendBtn) {
-        els.sendBtn.setAttribute('aria-label', 'Send');
-        els.sendBtn.innerHTML = '<span>➤</span>';
       }
     }
   }
