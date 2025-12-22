@@ -41,6 +41,10 @@ export function attachUIBindings({
   onMemoriesSearchInput,
   onMemoriesAdd,
   onMemoriesOpen,
+  onMemoriesExport,
+  onMemoriesImport,
+  onMemoriesImportFile,
+  onMemoriesImportComplete,
   onTrashSearchInput,
   onTrashRestoreAll,
   onTrashDeleteAll,
@@ -100,6 +104,10 @@ export function attachUIBindings({
     onMemoriesSearchInput,
     onMemoriesAdd,
     onMemoriesOpen,
+    onMemoriesExport,
+    onMemoriesImport,
+    onMemoriesImportFile,
+    onMemoriesImportComplete,
     onTrashSearchInput,
     onTrashRestoreAll,
     onTrashDeleteAll,
@@ -348,6 +356,18 @@ export function attachUIBindings({
     state,
     fileAttachmentHandler,
     signal
+  });
+
+  // ============================================================================
+  // Import Confirmation Modal
+  // ============================================================================
+  window.addEventListener('cc:showImportConfirmation', (e) => {
+    const { existingCount, importCount } = e.detail || {};
+    if (els.importConfirmationModalEl && els.importConfirmationMessageEl) {
+      const message = `You have ${existingCount} existing memories. The file contains ${importCount} memories. Choose how to import:`;
+      els.importConfirmationMessageEl.textContent = message;
+      els.importConfirmationModalEl.classList.remove('hidden');
+    }
   });
 
   // ============================================================================

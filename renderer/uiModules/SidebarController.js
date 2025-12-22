@@ -12,6 +12,10 @@ export class SidebarController {
     onMemoriesSearchInput,
     onMemoriesAdd,
     onMemoriesOpen,
+    onMemoriesExport,
+    onMemoriesImport,
+    onMemoriesImportFile,
+    onMemoriesImportComplete,
     onTrashSearchInput,
     onTrashRestoreAll,
     onTrashDeleteAll,
@@ -25,6 +29,10 @@ export class SidebarController {
     this.onMemoriesSearchInput = onMemoriesSearchInput;
     this.onMemoriesAdd = onMemoriesAdd;
     this.onMemoriesOpen = onMemoriesOpen;
+    this.onMemoriesExport = onMemoriesExport;
+    this.onMemoriesImport = onMemoriesImport;
+    this.onMemoriesImportFile = onMemoriesImportFile;
+    this.onMemoriesImportComplete = onMemoriesImportComplete;
     this.onTrashSearchInput = onTrashSearchInput;
     this.onTrashRestoreAll = onTrashRestoreAll;
     this.onTrashDeleteAll = onTrashDeleteAll;
@@ -32,6 +40,10 @@ export class SidebarController {
     this.signal = signal;
 
     this.attachListeners();
+  }
+
+  closeImportConfirmation() {
+    this.els.importConfirmationModalEl?.classList.add('hidden');
   }
 
   attachListeners() {
@@ -86,6 +98,45 @@ export class SidebarController {
 
     this.els.trashDeleteAllBtn?.addEventListener('click', async () => {
       await this.onTrashDeleteAll?.();
+    });
+
+    // Export memories
+    this.els.memoriesExportBtn?.addEventListener('click', async () => {
+      await this.onMemoriesExport?.();
+    });
+
+    // Import memories
+    this.els.memoriesImportBtn?.addEventListener('click', async () => {
+      await this.onMemoriesImport?.();
+    });
+
+    // Handle file input change
+    this.els.memoriesImportInput?.addEventListener('change', async (e) => {
+      const file = e.target?.files?.[0];
+      if (file) {
+        await this.onMemoriesImportFile?.(file);
+      }
+    });
+
+    // Import confirmation modal actions
+    this.els.importConfirmationCancelBtn?.addEventListener('click', () => {
+      this.closeImportConfirmation?.();
+    });
+
+    this.els.importConfirmationAddBtn?.addEventListener('click', async () => {
+      this.closeImportConfirmation?.();
+      await this.onMemoriesImportComplete?.('add');
+    });
+
+    this.els.importConfirmationOverrideBtn?.addEventListener('click', async () => {
+      this.closeImportConfirmation?.();
+      await this.onMemoriesImportComplete?.('override');
+    });
+
+    this.els.importConfirmationModalEl?.addEventListener('click', (e) => {
+      if (e.target === this.els.importConfirmationModalEl) {
+        this.closeImportConfirmation?.();
+      }
     });
 
     // Custom events

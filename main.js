@@ -104,7 +104,7 @@ app.whenReady().then(() => {
 
   // Register all IPC handlers
   registerOllamaHandlers(OLLAMA_BASE_URL, OLLAMA_HOST, state, sendSetupProgress);
-  registerToolsHandlers();
+  registerToolsHandlers(mainWindow);
   registerUpdaterHandlers(app, state);
 
   // Setup auto-updater

@@ -48,5 +48,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('ollama:setup-progress', listener);
     return () => ipcRenderer.removeListener('ollama:setup-progress', listener);
-  }
+  },
+  showSaveDialog: (options) => ipcRenderer.invoke('dialog:showSaveDialog', options)
 });

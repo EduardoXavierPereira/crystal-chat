@@ -84,6 +84,17 @@
             </div>
           </div>
         </div>
+          <div id="import-confirmation-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="import-confirmation-title">
+          <div class="modal">
+            <div id="import-confirmation-title" class="modal-title">Import Memories</div>
+            <div id="import-confirmation-message" class="modal-message"></div>
+            <div class="modal-actions">
+              <button id="import-confirmation-cancel" class="button button-ghost">Cancel</button>
+              <button id="import-confirmation-add" class="button button-ghost">Add</button>
+              <button id="import-confirmation-override" class="button button-ghost danger">Override</button>
+            </div>
+          </div>
+        </div>
           <div id="folder-create-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="folder-create-title">
           <div class="modal">
             <div id="folder-create-title" class="modal-title">Create folder</div>
@@ -290,6 +301,11 @@
                 </svg>
                 Memories
               </span>
+            </div>
+            <div class="memories-header-actions">
+              <button id="memories-export-btn" class="button button-ghost" title="Export all memories as JSON">Export</button>
+              <button id="memories-import-btn" class="button button-ghost" title="Import memories from JSON">Import</button>
+              <input id="memories-import-input" type="file" accept=".json" style="display: none;" />
             </div>
           </div>
           <div class="memories-add">

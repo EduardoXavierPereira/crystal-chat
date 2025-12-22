@@ -1,4 +1,4 @@
-const { ipcMain } = require('electron');
+const { ipcMain, dialog } = require('electron');
 const { webSearch } = require('../tools/web-search');
 const { openLink, readLocalFile } = require('../tools/web-fetch');
 const { fileRead, fileWrite, fileEdit, fileGlob, fileGrep, folderBrowse } = require('../tools/file-system');
@@ -10,8 +10,9 @@ const { fileRead, fileWrite, fileEdit, fileGlob, fileGrep, folderBrowse } = requ
 
 /**
  * Register tools IPC handlers
+ * @param {BrowserWindow} mainWindow - The main application window
  */
-function registerToolsHandlers() {
+function registerToolsHandlers(mainWindow) {
   // Web search
   ipcMain.handle('tools:webSearch', async (_evt, { query }) => {
     return await webSearch(query);
@@ -49,6 +50,11 @@ function registerToolsHandlers() {
 
   ipcMain.handle('tools:folderBrowse', async (_evt, { path, recursive }) => {
     return folderBrowse(path, recursive);
+  });
+
+  // Save file dialog
+  ipcMain.handle('dialog:showSaveDialog', async (_evt, options) => {
+    return await dialog.showSaveDialog(mainWindow, options);
   });
 }
 
