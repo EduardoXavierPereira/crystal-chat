@@ -48,7 +48,9 @@ export function createInitialState() {
     toolEnabled_file_edit: false,
     toolEnabled_file_glob: false,
     toolEnabled_file_grep: false,
-    toolEnabled_folder_browse: false
+    toolEnabled_folder_browse: false,
+    // Keyboard shortcuts (null = use defaults, object = user customizations)
+    keyboardShortcuts: null
   };
 }
 
@@ -84,7 +86,12 @@ export function saveUIState(state) {
       toolEnabled_file_edit: !!state.toolEnabled_file_edit,
       toolEnabled_file_glob: !!state.toolEnabled_file_glob,
       toolEnabled_file_grep: !!state.toolEnabled_file_grep,
-      toolEnabled_folder_browse: !!state.toolEnabled_folder_browse
+      toolEnabled_folder_browse: !!state.toolEnabled_folder_browse,
+      // Keyboard shortcuts
+      keyboardShortcuts:
+        typeof state.keyboardShortcuts === 'object' && state.keyboardShortcuts !== null
+          ? state.keyboardShortcuts
+          : null
     };
     localStorage.setItem(UI_STATE_KEY, JSON.stringify(toSave));
   } catch {
@@ -152,6 +159,9 @@ export function loadUIState() {
       }
       if (typeof parsed.toolEnabled_folder_browse === 'undefined') {
         parsed.toolEnabled_folder_browse = false;
+      }
+      if (typeof parsed.keyboardShortcuts === 'undefined') {
+        parsed.keyboardShortcuts = null;
       }
     }
     return parsed;

@@ -17,6 +17,7 @@ import { ThemeController } from './uiModules/ThemeController.js';
 import { SidebarController } from './uiModules/SidebarController.js';
 import { PopoverManager } from './uiModules/PopoverManager.js';
 import { SelectionAskButton } from './uiModules/SelectionAskButton.js';
+import { KeyboardShortcutsController } from './uiModules/KeyboardShortcutsController.js';
 
 export function attachUIBindings({
   els,
@@ -359,6 +360,30 @@ export function attachUIBindings({
   });
 
   // ============================================================================
+  // Keyboard Shortcuts Controller
+  // ============================================================================
+  const goToHome = () => {
+    state.pendingNew = true;
+    applySidebarSelection({ kind: 'chat', id: null });
+    focusDockView?.('chat');
+    els.promptInput.value = '';
+    autosizePrompt(els.promptInput);
+    els.promptInput.focus();
+  };
+
+  const keyboardShortcutsController = new KeyboardShortcutsController({
+    els,
+    state,
+    saveUIState,
+    signal,
+    callbacks: {
+      focusDockView,
+      abortStreaming,
+      goToHome
+    }
+  });
+
+  // ============================================================================
   // Import Confirmation Modal
   // ============================================================================
   window.addEventListener('cc:showImportConfirmation', (e) => {
@@ -375,5 +400,8 @@ export function attachUIBindings({
   // ============================================================================
   window.addEventListener('beforeunload', () => bindingsAbort.abort());
 
-  return bindingsAbort;
+  return {
+    bindingsAbort,
+    keyboardShortcutsController
+  };
 }

@@ -15,6 +15,37 @@ export function getViewElById(viewId) {
 }
 
 /**
+ * Walk the Golden Layout tree and find all items of a given type
+ * GoldenLayout doesn't have getItemsByType, so we implement it here
+ */
+function getItemsByType(item, type) {
+  const results = [];
+
+  if (!item) return results;
+
+  if (item.type === type) {
+    results.push(item);
+  }
+
+  // Recursively search content array
+  if (Array.isArray(item.content)) {
+    item.content.forEach(child => {
+      results.push(...getItemsByType(child, type));
+    });
+  }
+
+  // Also check if item itself has the needed structure
+  // Some Golden Layout versions nest items differently
+  if (item.children && Array.isArray(item.children)) {
+    item.children.forEach(child => {
+      results.push(...getItemsByType(child, type));
+    });
+  }
+
+  return results;
+}
+
+/**
  * Focus a specific dock view by switching to it
  * Tries multiple approaches to activate the view:
  * 1. Find containing stack and activate item within it
@@ -32,14 +63,27 @@ export function focusDockView(viewId, dock) {
     }
 
     const gl = dock?.gl;
-    const root = gl?.root;
-    const items = root?.getItemsByType?.('component') || [];
-    const matches = items.filter((it) => it?.config?.componentState?.viewId === viewId);
-
-    if (matches.length === 0) {
-      console.debug('[dock] No matching views found for viewId:', viewId);
+    if (!gl) {
+      console.debug('[dock] No GoldenLayout instance found');
       return;
     }
+
+    // Try different ways to access the root
+    let root = gl?.root;
+    if (!root && gl?.contentItem) {
+      root = gl.contentItem;
+    }
+
+    if (!root) {
+      console.debug('[dock] No root item found in GoldenLayout');
+      return;
+    }
+
+    const items = getItemsByType(root, 'component');
+    const matches = items.filter((it) => it?.config?.componentState?.viewId === viewId);
+
+    // If tree walking didn't find items, we'll try DOM fallback below
+    // so don't return early here
 
     const debug = !!window.__ccDebugDockFocus;
     const dbg = (...args) => {
@@ -91,7 +135,7 @@ export function focusDockView(viewId, dock) {
 
     // Preferred path: find the containing stack and activate the component within it.
     const tryStackActivation = () => {
-      const stacks = root?.getItemsByType?.('stack') || [];
+      const stacks = getItemsByType(root, 'stack');
       for (const it of matches) {
         const stack = stacks.find((s) => Array.isArray(s?.content) && s.content.includes(it));
         if (!stack) continue;
@@ -206,9 +250,10 @@ export function focusDockView(viewId, dock) {
 
     // DOM fallback: click the corresponding GoldenLayout tab
     wrapLogged(() => {
+      console.debug('[dock] Trying DOM fallback for viewId:', viewId);
       const rootEl = document.getElementById('dock-root');
       if (!rootEl) {
-        dbg('No dock-root element found');
+        console.debug('[dock] No dock-root element found');
         return false;
       }
 
@@ -217,9 +262,25 @@ export function focusDockView(viewId, dock) {
 
       const tabEls = Array.from(rootEl?.querySelectorAll?.('.lm_tab') || []);
       const titleEls = Array.from(rootEl?.querySelectorAll?.('.lm_tab .lm_title') || []);
+      const actualTexts = tabEls.map(t => t.textContent?.trim()).filter(Boolean);
+      console.debug('[dock] Found tabs:', tabEls.length, 'Found titles:', titleEls.length, 'Looking for:', wanted);
+      console.debug('[dock] Actual tab texts:', actualTexts.join(', '));
 
-      const tabByText = tabEls.find((t) => (t?.textContent || '').toString().trim().toLowerCase() === wanted);
+      // Try both exact match and case-insensitive match
+      let tabByText = tabEls.find((t) => (t?.textContent || '').toString().trim().toLowerCase() === wanted);
+
+      // If no exact match, try matching against any tab
+      if (!tabByText && actualTexts.length > 0) {
+        console.debug('[dock] No exact match found. Trying fuzzy match against:', actualTexts);
+        // For "chat" view, also try matching "Chat" or partial matches
+        tabByText = tabEls.find((t) => {
+          const text = (t?.textContent || '').toString().trim().toLowerCase();
+          return text === wanted || text.includes(wanted) || wanted.includes(text);
+        });
+      }
+
       if (tabByText) {
+        console.debug('[dock] Found tab by text match:', tabByText.textContent?.trim());
         dbg('dom fallback tab(.lm_tab)', { found: true, title: wantedTitle, viewId });
         if (dispatchTabActivate(tabByText)) return true;
       }

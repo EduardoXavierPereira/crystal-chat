@@ -95,7 +95,9 @@ export function getEls() {
     setupProgressBarFillEl: document.getElementById('setup-progress-bar-fill'),
     setupStepsEl: document.getElementById('setup-steps'),
     setupRetryBtn: document.getElementById('setup-retry'),
-    setupCloseBtn: document.getElementById('setup-close')
+    setupCloseBtn: document.getElementById('setup-close'),
+    keyboardShortcutsListEl: document.getElementById('keyboard-shortcuts-list'),
+    resetShortcutsBtn: document.getElementById('reset-shortcuts-btn')
   };
 }
 

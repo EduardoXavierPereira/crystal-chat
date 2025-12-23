@@ -30,6 +30,7 @@ import { runInit } from './init.js';
 import { createSetupController } from './setupController.js';
 import { createChatController } from './chatController.js';
 import { attachUIBindings } from './uiBindings.js';
+import { KeyboardShortcutsUI } from './uiModules/KeyboardShortcutsUI.js';
 import { DEFAULT_EMBEDDING_MODEL } from './memories.js';
 import { createMemoriesActions } from './memoriesActions.js';
 import { createToggle } from './toggle.js';
@@ -465,7 +466,7 @@ async function continueInitAfterSetup() {
     clearPendingAttachments
   });
 
-  const bindingsAbort = attachUIBindings({
+  const bindingsResult = attachUIBindings({
     els,
     state,
     tempChatId: TEMP_CHAT_ID,
@@ -499,6 +500,9 @@ async function continueInitAfterSetup() {
     onTrashOpen: () => trashActions?.renderTrashUI()
   });
 
+  const bindingsAbort = bindingsResult.bindingsAbort;
+  const keyboardShortcutsController = bindingsResult.keyboardShortcutsController;
+
   // Initialize folders controller with cleanup signal from UI bindings
   foldersActions = new FoldersController({
     els,
@@ -512,6 +516,15 @@ async function continueInitAfterSetup() {
 
   // Now render chats UI with folders controller fully initialized
   renderChatsUI();
+
+  // Initialize keyboard shortcuts UI
+  if (els.keyboardShortcutsListEl && keyboardShortcutsController) {
+    new KeyboardShortcutsUI({
+      els,
+      controller: keyboardShortcutsController,
+      signal: bindingsAbort.signal
+    });
+  }
 
   // Register folder action event handlers
   window.addEventListener('cc:moveChatToFolder', (e) => {
