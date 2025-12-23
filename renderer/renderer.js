@@ -503,6 +503,9 @@ async function continueInitAfterSetup() {
   const bindingsAbort = bindingsResult.bindingsAbort;
   const keyboardShortcutsController = bindingsResult.keyboardShortcutsController;
 
+  // Expose search controller globally for refresh after chat re-renders
+  window.__searchController = bindingsResult.searchController;
+
   // Initialize folders controller with cleanup signal from UI bindings
   foldersActions = new FoldersController({
     els,

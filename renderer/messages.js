@@ -659,4 +659,9 @@ export function renderActiveChat({
       // ignore
     }
   });
+
+  // Refresh search if active
+  if (window.__searchController) {
+    window.__searchController.refreshSearch();
+  }
 }

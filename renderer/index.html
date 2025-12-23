@@ -140,6 +140,65 @@
           </div>
           <div class="chat-header-right">
             <button
+              id="chat-header-search-btn"
+              type="button"
+              class="chat-header-tools-btn"
+              aria-label="Search in chat"
+              aria-haspopup="dialog"
+              aria-expanded="false"
+            >
+              <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/>
+                <path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </button>
+            <div id="chat-header-search-panel" class="chat-header-search-panel hidden" role="dialog" aria-label="Search">
+              <div class="search-input-wrapper">
+                <input
+                  id="chat-header-search-input"
+                  type="text"
+                  class="search-input"
+                  placeholder="Search in chat..."
+                  aria-label="Search query"
+                />
+                <button
+                  id="search-clear-btn"
+                  type="button"
+                  class="search-clear-btn hidden"
+                  aria-label="Clear search"
+                >
+                  <svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  </svg>
+                </button>
+              </div>
+              <div class="search-controls">
+                <span id="search-match-count" class="search-match-count">No matches</span>
+                <button
+                  id="search-prev-btn"
+                  type="button"
+                  class="search-nav-btn"
+                  aria-label="Previous match"
+                  disabled
+                >
+                  <svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+                <button
+                  id="search-next-btn"
+                  type="button"
+                  class="search-nav-btn"
+                  aria-label="Next match"
+                  disabled
+                >
+                  <svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <button
               id="chat-header-tools-btn"
               type="button"
               class="chat-header-tools-btn"

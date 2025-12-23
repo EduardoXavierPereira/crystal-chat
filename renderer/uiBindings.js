@@ -18,6 +18,7 @@ import { SidebarController } from './uiModules/SidebarController.js';
 import { PopoverManager } from './uiModules/PopoverManager.js';
 import { SelectionAskButton } from './uiModules/SelectionAskButton.js';
 import { KeyboardShortcutsController } from './uiModules/KeyboardShortcutsController.js';
+import { SearchController } from './uiModules/SearchController.js';
 
 export function attachUIBindings({
   els,
@@ -360,6 +361,20 @@ export function attachUIBindings({
   });
 
   // ============================================================================
+  // Search Controller
+  // ============================================================================
+  const searchController = new SearchController({
+    els,
+    state,
+    saveUIState,
+    signal
+  });
+
+  const openSearch = () => {
+    searchController.openSearch();
+  };
+
+  // ============================================================================
   // Keyboard Shortcuts Controller
   // ============================================================================
   const goToHome = () => {
@@ -379,7 +394,8 @@ export function attachUIBindings({
     callbacks: {
       focusDockView,
       abortStreaming,
-      goToHome
+      goToHome,
+      openSearch
     }
   });
 
@@ -402,6 +418,7 @@ export function attachUIBindings({
 
   return {
     bindingsAbort,
-    keyboardShortcutsController
+    keyboardShortcutsController,
+    searchController
   };
 }

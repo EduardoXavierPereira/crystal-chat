@@ -125,6 +125,12 @@ export class KeyboardShortcutsController {
         }
         break;
 
+      case 'search':
+        if (target === 'open') {
+          this.callbacks.openSearch?.();
+        }
+        break;
+
       default:
         console.warn(`Unknown shortcut action: ${action}`);
     }

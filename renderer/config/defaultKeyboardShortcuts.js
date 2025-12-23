@@ -66,6 +66,15 @@ export const DEFAULT_SHORTCUTS = {
     category: 'ai',
     action: 'streaming:abort',
     enabledWhen: 'isStreaming'
+  },
+
+  searchInChat: {
+    id: 'searchInChat',
+    label: 'Search in Chat',
+    description: 'Find keywords within the current conversation',
+    defaultKeys: ['Mod+F'],
+    category: 'navigation',
+    action: 'search:open'
   }
 };
 
