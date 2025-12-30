@@ -70,6 +70,3 @@ If tool mode is enabled, the model can request tool calls (web search, open link
 - Deleted chats are moved to Trash and are automatically purged after the retention window.
 - All AI inference happens locally on your machine using Ollama.
 
-## License
-
-Apache License 2.0

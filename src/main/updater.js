@@ -1,15 +1,15 @@
 const { ipcMain } = require('electron');
+const { CustomUpdater } = require('./custom-updater');
 
 /**
  * Auto-updater setup and handlers.
- * Manages application updates using electron-updater.
+ * Manages application updates using a self-hosted update server.
  */
 
-// Lazy-load autoUpdater to avoid issues with app not being ready
 let autoUpdater = null;
 function getAutoUpdater() {
   if (!autoUpdater) {
-    autoUpdater = require('electron-updater').autoUpdater;
+    autoUpdater = new CustomUpdater();
   }
   return autoUpdater;
 }
@@ -19,12 +19,16 @@ function getAutoUpdater() {
  * @param {object} app - Electron app instance
  * @param {Function} sendUpdaterEvent - Function to send events to renderer
  * @param {object} state - Shared state object (contains updateAvailableInfo)
+ * @param {string} updateServerUrl - URL to custom update server
  */
-function setupAutoUpdater(app, sendUpdaterEvent, state) {
+function setupAutoUpdater(app, sendUpdaterEvent, state, updateServerUrl) {
   // Avoid running updater in dev
   if (!app.isPackaged) return;
 
   const updater = getAutoUpdater();
+  if (updateServerUrl) {
+    updater.updateServerUrl = updateServerUrl;
+  }
 
   // Keep behavior explicit: we only download/install after user approves
   updater.autoDownload = false;
@@ -84,9 +88,11 @@ function registerUpdaterHandlers(app, state) {
       // If an update is available but not downloaded, download now
       if (state.updateAvailableInfo) {
         try {
-          await updater.downloadUpdate();
-        } catch {
-          // ignore; may already be downloaded or may fail
+          const downloadPath = await updater.downloadUpdate(state.updateAvailableInfo.updateInfo);
+          // Store path for installation
+          state.downloadedUpdatePath = downloadPath;
+        } catch (downloadError) {
+          return { ok: false, reason: 'download_failed', error: downloadError?.message };
         }
       }
       // quitAndInstall will run once the update is downloaded
