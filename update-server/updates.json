@@ -1,9 +1,0 @@
-{
-  "latest": {
-    "version": "0.10.0",
-    "releaseName": "v0.10.0",
-    "releaseNotes": "- Fixed layout persistence\n- Added keyboard shortcut customization\n- Improved search functionality",
-    "url": "https://your-domain.com/downloads/Crystal-Chat-0.10.0.exe",
-    "signature": "optional-signature-for-verification"
-  }
-}

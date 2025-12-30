@@ -147,7 +147,11 @@ class CustomUpdater extends EventEmitter {
     return new Promise((resolve, reject) => {
       const protocol = this.updateServerUrl.startsWith('https') ? https : http;
 
-      protocol.get(this.updateServerUrl, (response) => {
+      // Determine platform (windows or linux)
+      const platform = process.platform === 'win32' ? 'windows' : 'linux';
+      const urlWithPlatform = `${this.updateServerUrl}?platform=${platform}`;
+
+      protocol.get(urlWithPlatform, (response) => {
         if (response.statusCode !== 200) {
           reject(new Error(`Server returned ${response.statusCode}`));
           return;

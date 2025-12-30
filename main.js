@@ -13,7 +13,7 @@ const isDev = process.env.NODE_ENV === 'development';
 
 const OLLAMA_HOST = '127.0.0.1:11435';
 const OLLAMA_BASE_URL = `http://${OLLAMA_HOST}`;
-const UPDATE_SERVER_URL = process.env.UPDATE_SERVER_URL || 'http://localhost:3000/api/updates';
+const UPDATE_SERVER_URL = process.env.UPDATE_SERVER_URL || 'https://crystal-chat-updater--crystalchat.replit.app/api/updates';
 
 let mainWindow = null;
 
