@@ -167,6 +167,122 @@ export class FoldersController {
   }
 
   /**
+   * Rename a folder
+   */
+  renameFolder(folderId, newName) {
+    this.ensureFoldersInitialized();
+    const id = (folderId || '').toString().trim();
+    const name = (newName || '').toString().trim();
+    if (!id || !name) return;
+
+    const folder = folderTreeUtils.findFolder(this.state.folders, id);
+    if (!folder) return;
+
+    folder.name = name;
+    this.saveUIState(this.state);
+    this.renderChatsUI();
+  }
+
+  /**
+   * Rename a chat and persist the change
+   */
+  renameChat(chatId, newTitle) {
+    const id = (chatId || '').toString().trim();
+    const title = (newTitle || '').toString().trim();
+    if (!id || !title) return;
+
+    const chat = this.state.chats?.find((c) => c.id === id);
+    if (!chat) return;
+
+    // Update the first user message content
+    const branch = chat.branches?.find((b) => b.id === chat.activeBranchId);
+    if (branch) {
+      const firstUserMsg = branch.messages?.find((m) => m.role === 'user');
+      if (firstUserMsg) {
+        firstUserMsg.content = title;
+      }
+    }
+    
+    // Also update an explicit title property if your system uses one
+    chat.title = title;
+
+    // CRITICAL: Clear the editing state and SAVE
+    this.state.renamingId = null;
+    this.saveUIState(this.state);
+    this.renderChatsUI();
+  }
+
+  /**
+   * Move a folder to a different parent or root
+   */
+  moveFolder(folderId, targetParentFolderId) {
+    this.ensureFoldersInitialized();
+    const id = (folderId || '').toString().trim();
+    if (!id) return;
+
+    // Can't move a folder into itself or its children
+    const folderToMove = folderTreeUtils.findFolder(this.state.folders, id);
+    if (!folderToMove) return;
+
+    const isDescendantOf = (parentId, childId) => {
+      const parent = folderTreeUtils.findFolder(this.state.folders, parentId);
+      if (!parent) return false;
+      const walk = (folders) => {
+        return (folders || []).some((f) => {
+          if (f.id === childId) return true;
+          return walk(f.folders);
+        });
+      };
+      return walk(parent.folders);
+    };
+
+    const targetId = targetParentFolderId == null ? null : (targetParentFolderId || '').toString().trim();
+    if (targetId && isDescendantOf(id, targetId)) {
+      return; // Can't move a folder into its own descendants
+    }
+
+    // Remove from current location
+    let removed = null;
+    if (this.state.folders) {
+      for (let i = this.state.folders.length - 1; i >= 0; i--) {
+        if (this.state.folders[i].id === id) {
+          removed = this.state.folders.splice(i, 1)[0];
+          break;
+        }
+        // Search in nested folders
+        const walk = (folders) => {
+          for (let j = folders.length - 1; j >= 0; j--) {
+            if (folders[j].id === id) {
+              removed = folders.splice(j, 1)[0];
+              return true;
+            }
+            if (walk(folders[j].folders || [])) return true;
+          }
+          return false;
+        };
+        if (walk(this.state.folders[i].folders || [])) break;
+      }
+    }
+
+    if (!removed) return;
+
+    // Add to new location
+    if (targetId) {
+      const targetFolder = folderTreeUtils.findFolder(this.state.folders, targetId);
+      if (!targetFolder) return; // Target not found
+      if (!Array.isArray(targetFolder.folders)) targetFolder.folders = [];
+      targetFolder.folders.push(removed);
+      targetFolder.open = true;
+    } else {
+      if (!Array.isArray(this.state.folders)) this.state.folders = [];
+      this.state.folders.push(removed);
+    }
+
+    this.saveUIState(this.state);
+    this.renderChatsUI();
+  }
+
+  /**
    * Delete a folder and move its chats to trash
    */
   deleteFolder(folderId) {
@@ -269,6 +385,34 @@ export class FoldersController {
       },
       onDropOnRoot: (e) => {
         this.dragDropHandler.handleDropOnRoot(e);
+      },// Inside FoldersController.js -> renderFoldersUI()
+onStartRename: {
+        begin: (chatId) => {
+          this.state.renamingId = chatId;
+          this.renderChatsUI();
+        },
+        cancel: async () => {
+          this.state.renamingId = null;
+          this.renderChatsUI();
+        },
+        commit: async (chatId, title) => {
+          // Simply call the helper method we just created
+          this.renameChat(chatId, title);
+        }
+      },
+      onStartRenameFolder: {
+        begin: (folderId) => {
+          this.state.renamingFolderId = folderId;
+          this.renderChatsUI();
+        },
+        cancel: async () => {
+          this.state.renamingFolderId = null;
+          this.renderChatsUI();
+        },
+        commit: async (folderId, name) => {
+          this.state.renamingFolderId = null;
+          this.renameFolder(folderId, name);
+        }
       },
       activeChatId
     });
@@ -563,5 +707,19 @@ export class FoldersController {
       },
       { signal: this.signal }
     );
+
+
+    // Move folder event
+    window.addEventListener(
+      'cc:moveFolder',
+      (e) => {
+        const { folderId, targetFolderId } = e.detail || {};
+        if (folderId) {
+          this.moveFolder(folderId, targetFolderId);
+        }
+      },
+      { signal: this.signal }
+    );
   }
+
 }

@@ -1,23 +1,5 @@
 import { chatTitleFromMessages } from './sidebar.js';
-
-function escapeHtml(text) {
-  return (text || '').replace(/[&<>"']/g, (ch) => {
-    switch (ch) {
-      case '&':
-        return '&amp;';
-      case '<':
-        return '&lt;';
-      case '>':
-        return '&gt;';
-      case '"':
-        return '&quot;';
-      case "'":
-        return '&#39;';
-      default:
-        return ch;
-    }
-  });
-}
+import { buildMenu, ICONS, escapeHtml } from './utils/menuBuilder.js';
 
 export function renderFoldersTree({
   els,
@@ -30,7 +12,9 @@ export function renderFoldersTree({
   onDragStartFolder,
   onRemoveChatFromFolder,
   onDropOnFolder,
-  onDropOnRoot
+  onDropOnRoot,
+  onStartRename,
+  onStartRenameFolder
 }) {
   if (!els.foldersListEl) return;
   els.foldersListEl.innerHTML = '';
@@ -102,163 +86,17 @@ export function renderFoldersTree({
     return out;
   };
 
-  const makeChatMenu = ({ chatId, onRemove }) => {
-    const wrap = document.createElement('div');
-    wrap.className = 'chat-menu-wrap';
-
-    const menuBtn = document.createElement('button');
-    menuBtn.className = 'chat-menu-btn';
-    menuBtn.type = 'button';
-    menuBtn.setAttribute('aria-label', 'Chat actions');
-    menuBtn.setAttribute('aria-haspopup', 'menu');
-    menuBtn.textContent = '⋯';
-
-    const menu = document.createElement('div');
-    menu.className = 'chat-menu hidden';
-    menu.setAttribute('role', 'menu');
-
-    let cleanupMenuEvents = null;
-    const closeMenu = () => {
-      menu.classList.add('hidden');
-      menuBtn.classList.remove('open');
-      menuBtn.setAttribute('aria-expanded', 'false');
-      if (cleanupMenuEvents) {
-        cleanupMenuEvents();
-        cleanupMenuEvents = null;
-      }
-    };
-
-    const openMenu = () => {
-      if (cleanupMenuEvents) {
-        cleanupMenuEvents();
-        cleanupMenuEvents = null;
-      }
-      menu.classList.remove('hidden');
-      menuBtn.classList.add('open');
-      menuBtn.setAttribute('aria-expanded', 'true');
-
-      const onDocClick = (ev) => {
-        if (!wrap.contains(ev.target)) closeMenu();
-      };
-      const onKeyDown = (ev) => {
-        if (ev.key === 'Escape') {
-          ev.preventDefault();
-          closeMenu();
-        }
-      };
-      window.addEventListener('click', onDocClick, true);
-      window.addEventListener('keydown', onKeyDown, true);
-      cleanupMenuEvents = () => {
-        window.removeEventListener('click', onDocClick, true);
-        window.removeEventListener('keydown', onKeyDown, true);
-      };
-    };
-
-    const buildMainMenu = () => {
-      menu.innerHTML = '';
-
-      const moveItem = document.createElement('button');
-      moveItem.type = 'button';
-      moveItem.className = 'chat-menu-item has-submenu';
-      moveItem.setAttribute('role', 'menuitem');
-      moveItem.setAttribute('aria-haspopup', 'menu');
-      moveItem.innerHTML = '<span class="chat-menu-item-text">Move to…</span><span class="chat-menu-item-chevron" aria-hidden="true">▸</span>';
-
-      const removeItem = document.createElement('button');
-      removeItem.type = 'button';
-      removeItem.className = 'chat-menu-item';
-      removeItem.setAttribute('role', 'menuitem');
-      removeItem.innerHTML = '<span class="chat-menu-item-text">Remove</span>';
-
-      const deleteItem = document.createElement('button');
-      deleteItem.type = 'button';
-      deleteItem.className = 'chat-menu-item danger';
-      deleteItem.setAttribute('role', 'menuitem');
-      deleteItem.innerHTML = '<span class="chat-menu-item-text">Delete</span>';
-
-      moveItem.onclick = (e) => {
-        e.stopPropagation();
-        menu.innerHTML = '';
-
-        const back = document.createElement('button');
-        back.type = 'button';
-        back.className = 'chat-menu-item';
-        back.setAttribute('role', 'menuitem');
-        back.innerHTML = '<span class="chat-menu-item-text">← Back</span>';
-        back.onclick = (ev) => {
-          ev.stopPropagation();
-          buildMainMenu();
-        };
-        menu.appendChild(back);
-
-        const mk = (label, folderId) => {
-          const b = document.createElement('button');
-          b.type = 'button';
-          b.className = 'chat-menu-item';
-          b.setAttribute('role', 'menuitem');
-          b.innerHTML = `<span class="chat-menu-item-text">${escapeHtml(label)}</span>`;
-          b.onclick = (ev) => {
-            ev.stopPropagation();
-            try {
-              window.dispatchEvent(new CustomEvent('cc:moveChatToFolder', { detail: { chatId, folderId } }));
-            } catch {
-              // ignore
-            }
-            closeMenu();
-          };
-          menu.appendChild(b);
-        };
-
-        mk('Root', null);
-        getFoldersFlatLocal().forEach((f) => {
-          const prefix = f.depth ? `${'—'.repeat(Math.min(6, f.depth))} ` : '';
-          mk(prefix + (f.name || 'Folder'), f.id);
-        });
-      };
-
-      removeItem.onclick = (e) => {
-        e.stopPropagation();
-        onRemove?.();
-        closeMenu();
-      };
-
-      deleteItem.onclick = (e) => {
-        e.stopPropagation();
-        try {
-          window.dispatchEvent(new CustomEvent('cc:trashChat', { detail: { chatId } }));
-        } catch {
-          // ignore
-        }
-        closeMenu();
-      };
-
-      menu.appendChild(moveItem);
-      menu.appendChild(removeItem);
-      menu.appendChild(deleteItem);
-    };
-
-    buildMainMenu();
-
-    menuBtn.onclick = (e) => {
-      e.stopPropagation();
-      if (!menu.classList.contains('hidden')) closeMenu();
-      else openMenu();
-    };
-    menu.onclick = (e) => {
-      e.stopPropagation();
-    };
-
-    wrap.appendChild(menuBtn);
-    wrap.appendChild(menu);
-    return wrap;
-  };
-
   rootChats.forEach((chat) => {
     const chatId = (chat.id || '').toString().trim();
     if (!chatId) return;
     const row = document.createElement('div');
     row.className = `folder-chat-item ${chatId === activeChatId ? 'active' : ''}`;
-    row.onclick = () => onOpenChat?.(chatId);
+
+    const isEditingChat = state.renamingId === chatId;
+
+    if (!isEditingChat) {
+      row.onclick = () => onOpenChat?.(chatId);
+    }
     row.draggable = true;
     row.ondragstart = (e) => {
       onDragStartChat?.(e, chatId);
@@ -266,18 +104,82 @@ export function renderFoldersTree({
 
     const name = document.createElement('div');
     name.className = 'folder-chat-name';
-    name.textContent = chatTitleFromMessages(chat);
+
+    if (isEditingChat) {
+      const input = document.createElement('input');
+      input.className = 'chat-rename-input';
+      input.value = chatTitleFromMessages(chat);
+      input.onkeydown = async (e) => {
+        e.stopPropagation(); // Prevents bubbling to parent containers/buttons
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          await onStartRename?.commit(chatId, input.value);
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          await onStartRename?.cancel();
+        }
+      };
+      input.onblur = async () => {
+        await onStartRename?.commit(chatId, input.value);
+      };
+      name.appendChild(input);
+      requestAnimationFrame(() => input.focus());
+    } else {
+      name.textContent = chatTitleFromMessages(chat);
+    }
     row.appendChild(name);
 
     row.appendChild(
-      makeChatMenu({
-        chatId,
-        onRemove: () => {
-          try {
-            window.dispatchEvent(new CustomEvent('cc:removeChatFromRoot', { detail: { chatId } }));
-          } catch {
-            // ignore
+      buildMenu({
+        ariaLabel: 'Chat actions',
+        items: [
+          {
+            label: 'Move to…',
+            icon: ICONS.folder,
+            isSubmenu: true,
+            onClick: () => {
+              // Submenu handled by buildMenu
+            }
+          },
+          {
+            label: 'Rename',
+            icon: ICONS.rename,
+            onClick: () => {
+              onStartRename?.begin(chatId);
+            }
+          },
+          {
+            label: 'Delete',
+            icon: ICONS.trash,
+            isDanger: true,
+            onClick: () => {
+              try {
+                window.dispatchEvent(new CustomEvent('cc:trashChat', { detail: { chatId } }));
+              } catch {
+                // ignore
+              }
+            }
           }
+        ],
+        getFoldersList: () => {
+          const root = { label: 'Root', id: null, onClick: (folderId) => {
+            try {
+              window.dispatchEvent(new CustomEvent('cc:moveChatToFolder', { detail: { chatId, folderId } }));
+            } catch {
+              // ignore
+            }
+          } };
+          return [root, ...getFoldersFlatLocal().map((f) => ({
+            label: (f.depth ? `${'—'.repeat(Math.min(6, f.depth))} ` : '') + (f.name || 'Folder'),
+            id: f.id,
+            onClick: (folderId) => {
+              try {
+                window.dispatchEvent(new CustomEvent('cc:moveChatToFolder', { detail: { chatId, folderId } }));
+              } catch {
+                // ignore
+              }
+            }
+          }))];
         }
       })
     );
@@ -321,7 +223,38 @@ export function renderFoldersTree({
 
     const nameEl = document.createElement('span');
     nameEl.className = 'folder-name';
-    nameEl.innerHTML = escapeHtml(folder.name || 'Folder');
+    const isEditingFolder = state.renamingFolderId === folder.id;
+
+    if (isEditingFolder) {
+      const input = document.createElement('input');
+      input.className = 'folder-rename-input';
+      input.value = folder.name || 'Folder';
+      input.onkeydown = async (e) => {
+        e.stopPropagation();
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          e.stopPropagation();
+          await onStartRenameFolder?.commit(folder.id, input.value);
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
+          await onStartRenameFolder?.cancel();
+        }
+      };
+      input.onblur = async () => {
+        await onStartRenameFolder?.commit(folder.id, input.value);
+      };
+      input.onclick = (e) => {
+        e.stopPropagation();
+      };
+      nameEl.appendChild(input);
+      requestAnimationFrame(() => {
+        input.focus();
+        input.select();
+      });
+    } else {
+      nameEl.innerHTML = escapeHtml(folder.name || 'Folder');
+    }
     headerLeft.appendChild(nameEl);
 
     header.appendChild(headerLeft);
@@ -329,19 +262,58 @@ export function renderFoldersTree({
     const headerRight = document.createElement('span');
     headerRight.className = 'folder-header-right';
 
-    const deleteBtn = document.createElement('button');
-    deleteBtn.type = 'button';
-    deleteBtn.className = 'folder-delete-btn';
-    deleteBtn.title = 'Delete folder';
-    deleteBtn.setAttribute('aria-label', 'Delete folder');
-    deleteBtn.innerHTML =
-      '<svg class="folder-delete-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
-    deleteBtn.onclick = (e) => {
-      e.stopPropagation();
-      onDeleteFolder?.(folder.id);
-    };
-
-    headerRight.appendChild(deleteBtn);
+    headerRight.appendChild(
+      buildMenu({
+        ariaLabel: 'Folder actions',
+        items: [
+          {
+            label: 'Move to…',
+            icon: ICONS.folder,
+            isSubmenu: true,
+            onClick: () => {
+              // Submenu handled by buildMenu
+            }
+          },
+          {
+            label: 'Rename',
+            icon: ICONS.rename,
+            onClick: () => {
+              onStartRenameFolder?.begin(folder.id);
+            }
+          },
+          {
+            label: 'Delete',
+            icon: ICONS.trash,
+            isDanger: true,
+            onClick: () => {
+              onDeleteFolder?.(folder.id);
+            }
+          }
+        ],
+        getFoldersList: () => {
+          const root = { label: 'Root', id: null, onClick: (targetFolderId) => {
+            try {
+              window.dispatchEvent(new CustomEvent('cc:moveFolder', { detail: { folderId: folder.id, targetFolderId } }));
+            } catch {
+              // ignore
+            }
+          } };
+          return [root, ...getFoldersFlatLocal()
+            .filter((f) => f.id !== folder.id)
+            .map((f) => ({
+              label: (f.depth ? `${'—'.repeat(Math.min(6, f.depth))} ` : '') + (f.name || 'Folder'),
+              id: f.id,
+              onClick: (targetFolderId) => {
+                try {
+                  window.dispatchEvent(new CustomEvent('cc:moveFolder', { detail: { folderId: folder.id, targetFolderId } }));
+                } catch {
+                  // ignore
+                }
+              }
+            }))];
+        }
+      })
+    );
     header.appendChild(headerRight);
 
     header.onclick = (e) => {
@@ -395,9 +367,16 @@ export function renderFoldersTree({
       const chat = chatsById.get((chatId || '').toString().trim());
       if (!chat || chat.deletedAt) return;
 
+      const chatIdTrimmed = (chat.id || '').toString().trim();
+
       const row = document.createElement('div');
       row.className = `folder-chat-item ${chat.id === activeChatId ? 'active' : ''}`;
-      row.onclick = () => onOpenChat?.(chat.id);
+
+      const isEditingChat = state.renamingId === chatIdTrimmed;
+
+      if (!isEditingChat) {
+        row.onclick = () => onOpenChat?.(chat.id);
+      }
       row.draggable = true;
       row.ondragstart = (e) => {
         onDragStartChat?.(e, chat.id);
@@ -405,14 +384,82 @@ export function renderFoldersTree({
 
       const name = document.createElement('div');
       name.className = 'folder-chat-name';
-      name.textContent = chatTitleFromMessages(chat);
+
+      if (isEditingChat) {
+        const input = document.createElement('input');
+        input.className = 'chat-rename-input';
+        input.value = chatTitleFromMessages(chat);
+        input.onkeydown = async (e) => {
+          e.stopPropagation(); // Prevents bubbling to parent containers/buttons
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            await onStartRename?.commit(chatIdTrimmed, input.value);
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            await onStartRename?.cancel();
+          }
+        };
+        input.onblur = async () => {
+          await onStartRename?.commit(chatIdTrimmed, input.value);
+        };
+        name.appendChild(input);
+        requestAnimationFrame(() => input.focus());
+      } else {
+        name.textContent = chatTitleFromMessages(chat);
+      }
       row.appendChild(name);
 
       row.appendChild(
-        makeChatMenu({
-          chatId: (chat.id || '').toString().trim(),
-          onRemove: () => {
-            onRemoveChatFromFolder?.(folder.id, (chat.id || '').toString().trim());
+        buildMenu({
+          ariaLabel: 'Chat actions',
+          items: [
+            {
+              label: 'Move to…',
+              icon: ICONS.folder,
+              isSubmenu: true,
+              onClick: () => {
+                // Submenu handled by buildMenu
+              }
+            },
+            {
+              label: 'Rename',
+              icon: ICONS.rename,
+              onClick: () => {
+                onStartRename?.begin(chatIdTrimmed);
+              }
+            },
+            {
+              label: 'Delete',
+              icon: ICONS.trash,
+              isDanger: true,
+              onClick: () => {
+                try {
+                  window.dispatchEvent(new CustomEvent('cc:trashChat', { detail: { chatId: chatIdTrimmed } }));
+                } catch {
+                  // ignore
+                }
+              }
+            }
+          ],
+          getFoldersList: () => {
+            const root = { label: 'Root', id: null, onClick: (folderId) => {
+              try {
+                window.dispatchEvent(new CustomEvent('cc:moveChatToFolder', { detail: { chatId: chatIdTrimmed, folderId } }));
+              } catch {
+                // ignore
+              }
+            } };
+            return [root, ...getFoldersFlatLocal().map((f) => ({
+              label: (f.depth ? `${'—'.repeat(Math.min(6, f.depth))} ` : '') + (f.name || 'Folder'),
+              id: f.id,
+              onClick: (folderId) => {
+                try {
+                  window.dispatchEvent(new CustomEvent('cc:moveChatToFolder', { detail: { chatId: chatIdTrimmed, folderId } }));
+                } catch {
+                  // ignore
+                }
+              }
+            }))];
           }
         })
       );
